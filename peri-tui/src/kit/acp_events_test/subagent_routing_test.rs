@@ -1,5 +1,5 @@
 use super::*;
-use crate::kit::test_support::NotificationGuard;
+use crate::kit::test_support::{AtomsGuard, NotificationGuard};
 
 fn make_state(phase: SessionPhase, variant: u8) -> BridgeState {
     BridgeState {
@@ -345,6 +345,7 @@ fn test_dispatch_sync_subagent_tool_routed_to_group() {
 #[serial]
 fn test_late_agent_tool_card_adopts_early_subagent_group() {
     crate::kit::atoms::init_atoms();
+    let _todo = AtomsGuard::new().take(&crate::kit::atoms::TODO_ITEMS);
     *VIEW_MODELS.state().write() = ViewModelsSnapshot::default();
     let mut state = make_state(SessionPhase::Idle, 0);
 

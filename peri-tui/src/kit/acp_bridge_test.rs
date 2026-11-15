@@ -1,5 +1,6 @@
 use super::*;
 use crate::kit::acp_types::PendingInteraction;
+use crate::kit::test_support::AtomsGuard;
 use peri_acp_types::event_data::{AskUser, HitlPending};
 use serial_test::serial;
 
@@ -41,6 +42,8 @@ struct ReplayAtomsGuard {
     view: atoms::ViewModelsSnapshot,
     acp: atoms::AcpStateSnapshot,
     steers: crate::kit::steer_state::SteerState,
+    // 发布快照会附带 todo 摘要，前序用例留下的 TODO_ITEMS 会多出一条。
+    _todo: AtomsGuard,
 }
 
 impl ReplayAtomsGuard {
@@ -50,8 +53,25 @@ impl ReplayAtomsGuard {
             view: atoms::VIEW_MODELS.state().read().clone(),
             acp: atoms::ACP_STATE.state().read().clone(),
             steers: crate::kit::steer_state::STEERS.state().read().clone(),
+            _todo: AtomsGuard::new().take(&atoms::TODO_ITEMS),
         }
     }
+}
+
+/// bridge reset 用例的全局 atom 前提（取走并清空）与恢复。
+fn bridge_reset_atoms() -> AtomsGuard {
+    AtomsGuard::new()
+        .take(&atoms::ACTIVE_SESSION_ID)
+        .take(&atoms::PENDING_COMPACT_NOTE)
+        .replace(
+            &atoms::BRIDGE_RESET_COUNTER,
+            atoms::BRIDGE_RESET_COUNTER.get(),
+        )
+        .take(&atoms::ACP_STATE)
+        .take(&atoms::INPUT_BUFFER)
+        .take(&atoms::FOLD_OVERRIDES)
+        .take(&atoms::FOCUSED_ENTRY)
+        .take(&atoms::VIEW_MODELS)
 }
 
 impl Drop for ReplayAtomsGuard {
@@ -392,20 +412,11 @@ fn test_receiver_close_reset_wins_over_dirty_final_publication() {
 #[test]
 #[serial]
 fn test_bridge_reset_rehydrates_pending_compact_note_for_same_session() {
-    use crate::kit::atoms::{
-        ACP_STATE, ACTIVE_SESSION_ID, BRIDGE_RESET_COUNTER, FOCUSED_ENTRY, FOLD_OVERRIDES,
-        INPUT_BUFFER, PENDING_COMPACT_NOTE, VIEW_MODELS,
-    };
+    use crate::kit::atoms::{ACTIVE_SESSION_ID, BRIDGE_RESET_COUNTER, PENDING_COMPACT_NOTE};
     use crate::kit::tui_render_unit::TuiRenderUnit;
 
-    let old_active = ACTIVE_SESSION_ID.state().read().clone();
-    let old_note = PENDING_COMPACT_NOTE.state().read().clone();
+    let _atoms = bridge_reset_atoms();
     let old_reset = BRIDGE_RESET_COUNTER.get();
-    let old_acp_state = ACP_STATE.state().read().clone();
-    let old_input = INPUT_BUFFER.state().read().clone();
-    let old_fold_overrides = FOLD_OVERRIDES.state().read().clone();
-    let old_focused_entry = FOCUSED_ENTRY.state().read().clone();
-    let old_view = VIEW_MODELS.state().read().clone();
     *ACTIVE_SESSION_ID.state().write() = "s1".into();
     PENDING_COMPACT_NOTE.set(Some("compact complete".into()));
     let mut state = scheduler_state();
@@ -419,34 +430,16 @@ fn test_bridge_reset_rehydrates_pending_compact_note_for_same_session() {
     ));
     assert!(PENDING_COMPACT_NOTE.state().read().is_none());
     assert!(!crate::kit::atoms::ACP_STATE.state().read().is_loading);
-
-    *ACTIVE_SESSION_ID.state().write() = old_active;
-    *PENDING_COMPACT_NOTE.state().write() = old_note;
-    BRIDGE_RESET_COUNTER.set(old_reset);
-    *ACP_STATE.state().write() = old_acp_state;
-    *INPUT_BUFFER.state().write() = old_input;
-    *FOLD_OVERRIDES.state().write() = old_fold_overrides;
-    *FOCUSED_ENTRY.state().write() = old_focused_entry;
-    *VIEW_MODELS.state().write() = old_view;
 }
 
 /// 普通 thread 切换不能把旧 session 的 compact 完成提示带到新 session。
 #[test]
 #[serial]
 fn test_bridge_reset_discards_pending_compact_note_on_session_switch() {
-    use crate::kit::atoms::{
-        ACP_STATE, ACTIVE_SESSION_ID, BRIDGE_RESET_COUNTER, FOCUSED_ENTRY, FOLD_OVERRIDES,
-        INPUT_BUFFER, PENDING_COMPACT_NOTE, VIEW_MODELS,
-    };
+    use crate::kit::atoms::{ACTIVE_SESSION_ID, BRIDGE_RESET_COUNTER, PENDING_COMPACT_NOTE};
 
-    let old_active = ACTIVE_SESSION_ID.state().read().clone();
-    let old_note = PENDING_COMPACT_NOTE.state().read().clone();
+    let _atoms = bridge_reset_atoms();
     let old_reset = BRIDGE_RESET_COUNTER.get();
-    let old_acp_state = ACP_STATE.state().read().clone();
-    let old_input = INPUT_BUFFER.state().read().clone();
-    let old_fold_overrides = FOLD_OVERRIDES.state().read().clone();
-    let old_focused_entry = FOCUSED_ENTRY.state().read().clone();
-    let old_view = VIEW_MODELS.state().read().clone();
     *ACTIVE_SESSION_ID.state().write() = "s2".into();
     PENDING_COMPACT_NOTE.set(Some("old compact complete".into()));
     let mut state = scheduler_state();
@@ -456,15 +449,6 @@ fn test_bridge_reset_discards_pending_compact_note_on_session_switch() {
 
     assert!(state.current_turn.view_models().is_empty());
     assert!(PENDING_COMPACT_NOTE.state().read().is_none());
-
-    *ACTIVE_SESSION_ID.state().write() = old_active;
-    *PENDING_COMPACT_NOTE.state().write() = old_note;
-    BRIDGE_RESET_COUNTER.set(old_reset);
-    *ACP_STATE.state().write() = old_acp_state;
-    *INPUT_BUFFER.state().write() = old_input;
-    *FOLD_OVERRIDES.state().write() = old_fold_overrides;
-    *FOCUSED_ENTRY.state().write() = old_focused_entry;
-    *VIEW_MODELS.state().write() = old_view;
 }
 
 /// replay 的 user/assistant 事件是历史投影，不能重新把 reset 后的 bridge
@@ -472,19 +456,10 @@ fn test_bridge_reset_discards_pending_compact_note_on_session_switch() {
 #[test]
 #[serial]
 fn test_compact_replay_events_keep_bridge_idle_after_reset() {
-    use crate::kit::atoms::{
-        ACP_STATE, ACTIVE_SESSION_ID, BRIDGE_RESET_COUNTER, FOCUSED_ENTRY, FOLD_OVERRIDES,
-        INPUT_BUFFER, PENDING_COMPACT_NOTE, VIEW_MODELS,
-    };
+    use crate::kit::atoms::{ACTIVE_SESSION_ID, BRIDGE_RESET_COUNTER};
 
-    let old_active = ACTIVE_SESSION_ID.state().read().clone();
-    let old_note = PENDING_COMPACT_NOTE.state().read().clone();
+    let _atoms = bridge_reset_atoms();
     let old_reset = BRIDGE_RESET_COUNTER.get();
-    let old_acp_state = ACP_STATE.state().read().clone();
-    let old_input = INPUT_BUFFER.state().read().clone();
-    let old_fold_overrides = FOLD_OVERRIDES.state().read().clone();
-    let old_focused_entry = FOCUSED_ENTRY.state().read().clone();
-    let old_view = VIEW_MODELS.state().read().clone();
     *ACTIVE_SESSION_ID.state().write() = "s1".into();
     let mut state = scheduler_state();
     let mut last_reset = old_reset;
@@ -507,15 +482,6 @@ fn test_compact_replay_events_keep_bridge_idle_after_reset() {
 
     assert_eq!(state.phase, SessionPhase::Idle);
     assert!(!crate::kit::atoms::ACP_STATE.state().read().is_loading);
-
-    *ACTIVE_SESSION_ID.state().write() = old_active;
-    *PENDING_COMPACT_NOTE.state().write() = old_note;
-    BRIDGE_RESET_COUNTER.set(old_reset);
-    *ACP_STATE.state().write() = old_acp_state;
-    *INPUT_BUFFER.state().write() = old_input;
-    *FOLD_OVERRIDES.state().write() = old_fold_overrides;
-    *FOCUSED_ENTRY.state().write() = old_focused_entry;
-    *VIEW_MODELS.state().write() = old_view;
 }
 
 #[test]

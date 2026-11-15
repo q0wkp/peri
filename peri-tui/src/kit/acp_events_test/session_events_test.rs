@@ -1,4 +1,5 @@
 use super::*;
+use crate::kit::test_support::AtomsGuard;
 
 #[test]
 #[serial]
@@ -125,6 +126,7 @@ fn test_push_view_models_uses_bridge_state() {
 #[serial]
 fn test_handle_plan_update_multiple_entries() {
     crate::kit::atoms::init_atoms();
+    let _todo = AtomsGuard::new().take(&crate::kit::atoms::TODO_ITEMS);
     *crate::kit::atoms::TODO_ITEMS.state().write() = Vec::new();
 
     let plan_json = json!({
@@ -164,6 +166,7 @@ fn test_handle_plan_update_empty_entries() {
 #[serial]
 fn test_handle_plan_update_missing_entries() {
     crate::kit::atoms::init_atoms();
+    let _todo = AtomsGuard::new().take(&crate::kit::atoms::TODO_ITEMS);
     // 写入一个非空值，确认不被覆盖
     *crate::kit::atoms::TODO_ITEMS.state().write() = vec![crate::kit::message_area::TodoItem {
         status: crate::kit::message_area::TodoStatus::InProgress,

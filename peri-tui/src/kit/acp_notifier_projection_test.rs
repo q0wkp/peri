@@ -2,6 +2,7 @@ use super::*;
 use crate::kit::acp_types::CacheUsageSample;
 use crate::kit::slash_completion::SlashActionKind;
 use crate::kit::slash_projection::ArgKind;
+use crate::kit::test_support::AtomsGuard;
 use serde_json::json;
 use serial_test::serial;
 #[tokio::test]
@@ -289,7 +290,7 @@ async fn test_usage_update_ignores_auxiliary_and_preserves_explicit_zero_cache_r
 async fn test_handle_session_update_parses_plan() {
     use crate::kit::message_area::TodoStatus;
     crate::kit::atoms::init_atoms();
-    *crate::kit::atoms::TODO_ITEMS.state().write() = Vec::new();
+    let _todo = AtomsGuard::new().take(&crate::kit::atoms::TODO_ITEMS);
 
     let payload = json!({
         "sessionId": "s1",
