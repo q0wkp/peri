@@ -10,7 +10,8 @@ fn test_ui_command_specs_non_empty() {
     let panel_commands = PANELS
         .iter()
         .filter(|panel| !panel.slash_command.is_empty());
-    assert_eq!(specs.len(), panel_commands.clone().count() + 1);
+    // 非面板条目：setup + exit
+    assert_eq!(specs.len(), panel_commands.clone().count() + 2);
     for panel in panel_commands {
         let spec = specs
             .iter()
@@ -160,4 +161,50 @@ fn test_resolve_ui_command_non_ui_domain_falls_through() {
         None,
         "双重 ui: 前缀不得命中 Model 面板"
     );
+}
+
+#[test]
+fn test_ui_command_specs_contains_exit_with_quit_alias() {
+    let specs = ui_command_specs();
+    let exit = specs
+        .iter()
+        .find(|s| s.name == "exit")
+        .expect("清单必须含 exit 条目（补全列表可见）");
+    assert_eq!(exit.aliases, &["quit"]);
+    assert_eq!(exit.description, "Exit the program");
+}
+
+#[test]
+fn test_resolve_ui_command_exit_forms() {
+    for form in [
+        "exit", "quit", "ui:exit", "ui:quit", "EXIT", "UI:Quit", " exit ",
+    ] {
+        assert_eq!(
+            resolve_ui_command(form),
+            Some(UiCommandAction::Exit),
+            "{form:?} 应解析为 Exit"
+        );
+    }
+    // 非 ui 域显式形态仍 fall through
+    assert_eq!(resolve_ui_command("core:exit"), None);
+    assert_eq!(resolve_ui_command("demo:quit"), None);
+}
+
+#[test]
+fn test_is_exit_keyword_only_bare_words() {
+    for word in ["exit", "quit", " Exit ", "QUIT", "\texit\n"] {
+        assert!(is_exit_keyword(word), "{word:?} 应判为退出词");
+    }
+    for text in [
+        "",
+        "exit now",
+        "exiting",
+        "please exit",
+        "/exit",
+        "ui:exit",
+        "model",
+        "setup",
+    ] {
+        assert!(!is_exit_keyword(text), "{text:?} 不应判为退出词");
+    }
 }

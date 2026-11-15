@@ -151,6 +151,58 @@ fn test_parse_submit_request_matches_view_actions() {
 }
 
 #[test]
+fn test_parse_submit_request_exit_slash_forms() {
+    for input in [
+        "/exit",
+        "/quit",
+        "/EXIT",
+        "/ui:exit",
+        "/exit  ",
+        "/quit now",
+    ] {
+        assert_eq!(
+            parse_submit_request(input),
+            Some(SubmitRequest::ViewAction(ViewActionRequest::Exit)),
+            "{input:?} 应解析为退出"
+        );
+    }
+}
+
+#[test]
+fn test_parse_submit_request_plain_exit_words_exit_instead_of_agent_text() {
+    for input in ["exit", "quit", "  Exit\n", "QUIT", "eXiT"] {
+        assert_eq!(
+            parse_submit_request(input),
+            Some(SubmitRequest::ViewAction(ViewActionRequest::Exit)),
+            "{input:?} 应解析为退出，不得作为消息发给 Agent"
+        );
+    }
+}
+
+#[test]
+fn test_parse_submit_request_exit_words_inside_sentences_stay_agent_text() {
+    for input in ["exit now", "please quit", "exiting", "ui:exit", "quit?"] {
+        assert!(
+            matches!(
+                parse_submit_request(input),
+                Some(SubmitRequest::AgentText { .. })
+            ),
+            "{input:?} 不是整条退出词，应作为消息"
+        );
+    }
+}
+
+#[test]
+fn test_is_exit_request_matches_parser() {
+    for input in ["/exit", "/quit", "exit", " QUIT "] {
+        assert!(is_exit_request(input), "{input:?}");
+    }
+    for input in ["", "/clear", "/provider", "/model", "hello", "exit now"] {
+        assert!(!is_exit_request(input), "{input:?}");
+    }
+}
+
+#[test]
 fn test_parse_submit_request_intercepts_ui_domain() {
     // `ui:` 前缀显式形态 → ui 域本地拦截
     assert_eq!(

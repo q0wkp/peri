@@ -282,6 +282,38 @@ fn test_submit_text_loading_clear_shows_notification_without_history_or_buffer()
     assert!(crate::kit::atoms::NOTIFICATION.state().read().is_some());
 }
 
+/// 退出不是消息：loading 门禁对 `/exit`、`/quit` 与纯文本 exit/quit 放行，
+/// 其余视图/控制请求仍被拦截。
+#[test]
+#[serial]
+fn test_dispatch_exit_passes_loading_gate_but_other_view_actions_do_not() {
+    reset_submit_side_effect_state();
+    for input in ["/exit", "/quit", "exit", "QUIT"] {
+        let recorder = make_submit_recorder();
+        dispatch_submit_request(parse_submit_request(input).unwrap(), true, |request| {
+            recorder.lock().push(request)
+        });
+        assert_eq!(
+            recorded_submit(&recorder),
+            Some(SubmitRequest::ViewAction(ViewActionRequest::Exit)),
+            "{input:?} 在 loading 时必须仍能发出退出请求"
+        );
+        assert!(
+            crate::kit::atoms::NOTIFICATION.state().read().is_none(),
+            "退出不应弹 submit-blocked 提示"
+        );
+    }
+
+    let recorder = make_submit_recorder();
+    dispatch_submit_request(
+        parse_submit_request("/provider").unwrap(),
+        true,
+        |request| recorder.lock().push(request),
+    );
+    assert_eq!(recorded_submit(&recorder), None, "非退出视图动作仍被拦截");
+    assert!(crate::kit::atoms::NOTIFICATION.state().read().is_some());
+}
+
 /// 移除一张后再提交：上行内容与输入区呈现同步——只有剩余附件进 content，
 /// 已移除的图片不再出现（不残留引用）。
 #[test]

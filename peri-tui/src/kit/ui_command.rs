@@ -17,6 +17,7 @@ use crate::kit::panel_registry::PANELS;
 pub enum UiCommandAction {
     OpenPanel(PanelKind),
     ToggleSetup,
+    Exit,
 }
 
 /// 本地内部表（仅渲染 / 拦截用；与 Phase 3 契约类型 `peri_caps::UiCommandSpec`
@@ -33,7 +34,22 @@ pub struct UiCommandSpec {
 /// `/resume`、`/his` 都是 `/threads` 的别名）。
 const THREAD_ALIASES: &[&str] = &["history", "resume", "his"];
 
-/// ui 域命令清单 = PANELS（`slash_command` 非空）+ `/setup` + 面板别名。
+const EXIT_NAME: &str = "exit";
+const EXIT_ALIASES: &[&str] = &["quit"];
+
+fn is_exit_name(bare: &str) -> bool {
+    bare == EXIT_NAME || EXIT_ALIASES.contains(&bare)
+}
+
+/// 纯文本退出词（无斜杠的 `exit` / `quit`，trim、大小写不敏感）。
+///
+/// 词表与 `/exit`、`/quit` 同源；`ui:exit` 等显式形态不算——裸词只给退出，
+/// 不能顺带放行其他 ui 命令名。
+pub fn is_exit_keyword(input: &str) -> bool {
+    is_exit_name(&input.trim().to_ascii_lowercase())
+}
+
+/// ui 域命令清单 = PANELS（`slash_command` 非空）+ `/setup` + `/exit` + 面板别名。
 ///
 /// 面板条目直接从 [`PANELS`] 表投影（数据同源：`slash_command` → 注册名、
 /// `description` → 注册描述），别名挂在对应面板条目上。
@@ -56,12 +72,17 @@ pub fn ui_command_specs() -> Vec<UiCommandSpec> {
         aliases: &[],
         description: "Open setup wizard to configure providers",
     });
+    specs.push(UiCommandSpec {
+        name: EXIT_NAME,
+        aliases: EXIT_ALIASES,
+        description: "Exit the program",
+    });
     specs
 }
 
 /// 裸名 / `ui:` 前缀 / aliases 归一化查找。
 ///
-/// - 裸名（`history` / `model`）：ui 域快捷形态，查 PANELS + 别名表 + setup；
+/// - 裸名（`history` / `model`）：ui 域快捷形态，查 PANELS + 别名表 + setup + exit；
 /// - `ui:` 显式形态（`ui:history`）：剥除 `ui:` 前缀后仅允许 1 段（设计 §52
 ///   层数上限：2 段冒号），多层形态（`ui:foo:bar`）显式拒绝；
 /// - **非 ui 域显式形态（`core:compact` / `demo:hello` / 未知域）一律
@@ -79,6 +100,9 @@ pub fn resolve_ui_command(name: &str) -> Option<UiCommandAction> {
     };
     if bare == "setup" {
         return Some(UiCommandAction::ToggleSetup);
+    }
+    if is_exit_name(bare) {
+        return Some(UiCommandAction::Exit);
     }
     if THREAD_ALIASES.contains(&bare) {
         return Some(UiCommandAction::OpenPanel(PanelKind::ThreadBrowser));

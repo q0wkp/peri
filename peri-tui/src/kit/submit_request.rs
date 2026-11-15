@@ -1,6 +1,6 @@
 use crate::app::panel_types::PanelKind;
 use crate::kit::atoms::PendingAttachment;
-use crate::kit::ui_command::{UiCommandAction, resolve_ui_command};
+use crate::kit::ui_command::{UiCommandAction, is_exit_keyword, resolve_ui_command};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubmitRequest {
@@ -36,7 +36,7 @@ pub enum ViewActionRequest {
     CycleProvider,
     CyclePermissionMode,
     ExportText(ExportMode),
-    /// /exit 命令：退出程序。
+    /// 退出程序：`/exit`、`/quit` 或纯文本 `exit` / `quit`。
     Exit,
 }
 
@@ -59,6 +59,11 @@ pub fn parse_submit_request(input: &str) -> Option<SubmitRequest> {
     }
 
     let command = trimmed.split_whitespace().next().unwrap_or("");
+
+    // 纯文本 exit / quit（整条输入，非斜杠）按退出处理，不当作消息发给 Agent。
+    if is_exit_keyword(trimmed) {
+        return Some(SubmitRequest::ViewAction(ViewActionRequest::Exit));
+    }
 
     if is_clear_command(command) {
         return Some(SubmitRequest::SessionControl(SessionControlRequest::Clear));
@@ -90,6 +95,7 @@ pub fn parse_submit_request(input: &str) -> Option<SubmitRequest> {
             UiCommandAction::ToggleSetup => {
                 SubmitRequest::SessionControl(SessionControlRequest::ToggleSetup)
             }
+            UiCommandAction::Exit => SubmitRequest::ViewAction(ViewActionRequest::Exit),
         });
     }
 
@@ -97,6 +103,15 @@ pub fn parse_submit_request(input: &str) -> Option<SubmitRequest> {
         text: trimmed.to_string(),
         attachments: Vec::new(),
     })
+}
+
+/// 输入是否会被解析为退出请求。loading 门禁据此放行——退出不是消息，
+/// 不能被运行中的 turn 挡住。
+pub fn is_exit_request(input: &str) -> bool {
+    matches!(
+        parse_submit_request(input),
+        Some(SubmitRequest::ViewAction(ViewActionRequest::Exit))
+    )
 }
 
 fn is_clear_command(command: &str) -> bool {
@@ -116,7 +131,6 @@ fn parse_view_action(command: &str, input: &str) -> Option<ViewActionRequest> {
         "/provider" => Some(ViewActionRequest::CycleProvider),
         "/mode" => Some(ViewActionRequest::CyclePermissionMode),
         "/debug-export-text" => Some(ViewActionRequest::ExportText(parse_export_mode(input))),
-        "/exit" | "/quit" => Some(ViewActionRequest::Exit),
         _ => None,
     }
 }
