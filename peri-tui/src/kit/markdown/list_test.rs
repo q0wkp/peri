@@ -112,6 +112,7 @@ fn test_list_boundaries_with_paragraphs_keep_single_blank_line() {
 
 /// 非列表块（标题 / 段落）的间距不受本次变更影响。
 #[test]
+#[serial_test::parallel]
 fn test_non_list_block_spacing_unchanged() {
     let lines = render("# title\ntext\n\nmore");
     assert_eq!(lines, vec!["title", "", "text", "", "more"]);

@@ -101,6 +101,7 @@ fn legacy_test_only_state_is_excluded_from_production_budget() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn long_code_retains_parser_and_render_payloads() {
     let small = cache_for_source("```text\nshort\n```\n");
     let large = cache_for_source(&format!("```text\n{}\n```\n", "code line\n".repeat(512)));

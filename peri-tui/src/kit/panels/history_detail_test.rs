@@ -145,6 +145,7 @@ fn detail_failure_is_explicit_and_keeps_no_silent_empty_body() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn detail_scroll_does_not_touch_window_viewport_atom() {
     crate::kit::atoms::init_atoms();
     let before = crate::kit::atoms::WINDOW_VIEWPORT.state().read().clone();
@@ -160,6 +161,7 @@ fn detail_scroll_does_not_touch_window_viewport_atom() {
 }
 
 #[test]
+#[serial_test::serial]
 fn open_close_detail_uses_window_descriptor_and_keeps_slot_state() {
     crate::kit::atoms::init_atoms();
     let mut window = crate::kit::history_window::HistoryWindow::new(

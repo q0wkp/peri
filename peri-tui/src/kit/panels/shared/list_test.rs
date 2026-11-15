@@ -76,6 +76,7 @@ fn row_beyond_rendered_items_does_not_hit() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn first_frame_prediction_is_not_empty() {
     // 首帧 AreaTracker 未测量（Rect::default()）：不能按 0 行渲染空面板
     let predicted = content_rows(None, 30);

@@ -384,6 +384,7 @@ mod execution_done_test {
     use super::*;
 
     #[tokio::test]
+    #[serial_test::parallel]
     async fn test_agent_done_preserves_request_id_for_bridge() {
         let (tx, mut rx) =
             mpsc::channel::<AcpEventWithEpoch>(crate::kit::acp_bridge::BRIDGE_QUEUE_CAPACITY);

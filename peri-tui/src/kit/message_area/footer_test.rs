@@ -3,6 +3,7 @@
 use super::*;
 
 #[test]
+#[serial_test::parallel]
 fn test_render_todo_lines_icons_and_crossed() {
     let items = vec![
         TodoItem {
@@ -48,6 +49,7 @@ fn test_render_todo_lines_icons_and_crossed() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_render_todo_lines_empty() {
     let lines = render_todo_lines(&[]);
     assert_eq!(lines.len(), 1);

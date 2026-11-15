@@ -4,6 +4,7 @@ use super::*;
 
 /// 长 prompt 最多 6 个视觉行 + `… +N lines`；无全宽背景色。
 #[test]
+#[serial_test::parallel]
 fn test_user_long_prompt_capped_at_six_lines() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -35,6 +36,7 @@ fn test_user_long_prompt_capped_at_six_lines() {
 
 /// slash/@ 局部强调（§6.1）：token 用 accent.user。
 #[test]
+#[serial_test::parallel]
 fn test_user_slash_at_emphasis() {
     let grid = GridSpec::grid_for(80);
     let sem = THEME_ATOM.state().read().semantic;
@@ -59,6 +61,7 @@ fn test_user_slash_at_emphasis() {
 // ── System Reminder 折叠展示 ───────────────────────────────────────────────
 
 #[test]
+#[serial_test::parallel]
 fn test_system_reminder_collapsed_shows_only_muted_header() {
     let reminder = TuiSystemReminder::legacy("sensitive reminder body".into());
     let unit = TuiRenderUnit::TuiSystemReminder(reminder);
@@ -85,6 +88,7 @@ fn test_system_reminder_collapsed_shows_only_muted_header() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_compact_continuation_hint_renders_as_simple_system_prompt() {
     crate::i18n::init(Some("en"));
     let text = format!(
@@ -102,6 +106,7 @@ fn test_compact_continuation_hint_renders_as_simple_system_prompt() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_system_reminder_expanded_shows_body() {
     let mut reminder = TuiSystemReminder::legacy("first line\nsecond line".into());
     reminder.fold = FoldState::Expanded;
@@ -131,6 +136,7 @@ const TINY_PNG: &[u8] =
 /// @image 行 → meta 行（文件名 · 大小）；绝对路径不直接出现在默认渲染行
 /// （§6.2-5 路径泄漏约束）。
 #[test]
+#[serial_test::parallel]
 fn test_user_image_line_renders_meta() {
     crate::i18n::init(Some("en"));
     let dir = tempfile::tempdir().unwrap();
@@ -154,6 +160,7 @@ fn test_user_image_line_renders_meta() {
 
 /// 大小格式三档（B/KB/MB，§4.4 human_size）。
 #[test]
+#[serial_test::parallel]
 fn test_user_image_size_formats() {
     crate::i18n::init(Some("en"));
     let dir = tempfile::tempdir().unwrap();
@@ -191,6 +198,7 @@ fn test_user_image_size_formats() {
 
 /// 文件不存在 → missing 文案（i18n key）。
 #[test]
+#[serial_test::parallel]
 fn test_user_image_missing() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -206,6 +214,7 @@ fn test_user_image_missing() {
 /// 非图片行（@image 无路径 / @imagefoo / @image 中间空格）→ 走原
 /// emphasize_user_line 路径（原样渲染，不产生 meta 行）。
 #[test]
+#[serial_test::parallel]
 fn test_user_image_line_negative_cases() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -230,6 +239,7 @@ fn test_user_image_line_negative_cases() {
 /// 受管理与手工路径渲染文本一致（显示层不暴露绝对路径、无差异化文案；
 /// §6.1 Q6——差异仅在 T7 预览资格）。
 #[test]
+#[serial_test::parallel]
 fn test_user_image_managed_and_manual_same_rendering() {
     crate::i18n::init(Some("en"));
     let dir = tempfile::tempdir().unwrap();
@@ -290,6 +300,7 @@ fn test_build_image_meta_info_grading() {
 
 /// vm_to_lines_cached 收集 image_lines（logical_idx / path / managed / size_text）。
 #[test]
+#[serial_test::parallel]
 fn test_user_image_line_info_collected() {
     crate::i18n::init(Some("en"));
     let dir = tempfile::tempdir().unwrap();
@@ -317,6 +328,7 @@ fn test_user_image_line_info_collected() {
 
 /// hover 行渲染：绝对路径 + accent 高亮（sem.accents.user）+ 单行截断。
 #[test]
+#[serial_test::parallel]
 fn test_render_image_hover_line_absolute_path_highlight() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -346,6 +358,7 @@ fn test_render_image_hover_line_absolute_path_highlight() {
 
 /// hover 行超宽截断：不折行（布局稳定，§4.4 单行口径）。
 #[test]
+#[serial_test::parallel]
 fn test_render_image_hover_line_truncates() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(40); // content = 34
@@ -374,6 +387,7 @@ use crate::kit::tui_render_unit::UserAttachment;
 
 /// 文本 + 附件：正文之外多一行附件记录（图片标识 + 名称 + 大小）。
 #[test]
+#[serial_test::parallel]
 fn test_user_bubble_renders_attachment_record_with_text() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -392,6 +406,7 @@ fn test_user_bubble_renders_attachment_record_with_text() {
 
 /// 图片-only 提交（空文本 + 附件）：必须留下附件记录（此前渲染 0 行）。
 #[test]
+#[serial_test::parallel]
 fn test_user_bubble_image_only_renders_attachment_record() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -407,6 +422,7 @@ fn test_user_bubble_image_only_renders_attachment_record() {
 
 /// 多张附件逐张编号，可区分（名称与提交顺序一致）。
 #[test]
+#[serial_test::parallel]
 fn test_user_bubble_numbers_multiple_attachments() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -427,6 +443,7 @@ fn test_user_bubble_numbers_multiple_attachments() {
 
 /// 空文本 + 无附件（rewind/thinking 回传等）仍渲染 0 行——不产生悬空 turn 节拍。
 #[test]
+#[serial_test::parallel]
 fn test_user_bubble_empty_text_without_attachments_renders_nothing() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -436,6 +453,7 @@ fn test_user_bubble_empty_text_without_attachments_renders_nothing() {
 
 /// 非图片的 @文件引用不受影响：正文原样渲染，且不产生附件记录行。
 #[test]
+#[serial_test::parallel]
 fn test_user_bubble_file_mention_unaffected_by_attachment_record() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);

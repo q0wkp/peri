@@ -39,6 +39,7 @@ fn enqueue() -> EnqueueUserInputRequest {
 
 /// [回归测试] 首次 snapshot 的 generation 绑定必须先于同时到达的 canonical Delivered。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_initial_snapshot_reserves_generation_before_delivery() {
     let (transport, server) = mpsc_transport_pair();
     let (client, notification_tx, mut notifications) = AcpTuiClient::new(transport);

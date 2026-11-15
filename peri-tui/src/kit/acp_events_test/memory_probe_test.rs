@@ -8,6 +8,7 @@ use super::*;
 use std::sync::Arc;
 
 #[test]
+#[serial_test::serial]
 fn bridge_snapshot_separates_committed_current_and_folded_bytes() {
     let mut state = make_fold_test_state();
 
@@ -77,6 +78,7 @@ fn bridge_snapshot_separates_committed_current_and_folded_bytes() {
 /// [回归测试] 同一 `Arc` 出现在多个展示层时，`unique_*` 只能计一次；
 /// 槽位地址不能充当分配身份（每次 clone 的枚举槽位不同）。
 #[test]
+#[serial_test::serial]
 fn bridge_snapshot_dedups_shared_assistant_arc_across_layers() {
     let mut state = make_fold_test_state();
     let text = "shared-arc-body-".repeat(64);
@@ -109,6 +111,7 @@ fn bridge_snapshot_dedups_shared_assistant_arc_across_layers() {
 
 /// [M07 回归] 同一 Arc 同时出现在 current_turn 与 committed 时，unique 只计一次。
 #[test]
+#[serial_test::serial]
 fn bridge_snapshot_dedups_shared_arc_between_current_and_committed() {
     let mut state = make_fold_test_state();
     // PromptRunning 下 fold 不改写 bubble，folded_history 与 committed 共享同一 Arc。
@@ -136,6 +139,7 @@ fn bridge_snapshot_dedups_shared_arc_between_current_and_committed() {
 
 /// [M07 回归] 按值 clone 的 TuiToolCard 是独立分配，必须计两次。
 #[test]
+#[serial_test::serial]
 fn bridge_snapshot_counts_independently_cloned_tool_cards_twice() {
     let mut state = make_fold_test_state();
     let input = "input-summary-".repeat(64);
@@ -171,6 +175,7 @@ fn bridge_snapshot_counts_independently_cloned_tool_cards_twice() {
 /// [M07 回归] 大 raw_input 进入原始累积器计量；mark_committed 清空后
 /// body 归零但 String capacity 仍可区分。
 #[test]
+#[serial_test::serial]
 fn bridge_snapshot_separates_raw_input_and_capacity_after_clear() {
     let mut state = make_fold_test_state();
     let raw = "x".repeat(64 * 1024);

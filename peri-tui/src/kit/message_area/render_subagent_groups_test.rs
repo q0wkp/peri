@@ -7,6 +7,7 @@ use super::*;
 /// dim 符号——与主时间轴 tool activity row（bold primary + 状态色）差异化；
 /// 组内缩进已合并为总 `indent`（§5），与组头同列。
 #[test]
+#[serial_test::parallel]
 fn test_subagent_running_shows_recent_tool_lines() {
     let grid = GridSpec::grid_for(80);
     let children = im::Vector::from(vec![
@@ -94,6 +95,7 @@ fn test_subagent_running_shows_recent_tool_lines() {
 
 /// 纯文本子 Agent 没有工具行时仍须保留可聚焦的详情入口。
 #[test]
+#[serial_test::parallel]
 fn test_subagent_without_tools_keeps_detail_entry_across_statuses() {
     let grid = GridSpec::grid_for(80);
     for (running, error) in [(true, false), (false, false), (false, true)] {
@@ -130,6 +132,7 @@ fn test_subagent_without_tools_keeps_detail_entry_across_statuses() {
 /// Verb（<60 列不缩进，§9 前缀回退基准形态），无 braille/✓/× 字符；错误信号由
 /// 错误词与原因行兜底。
 #[test]
+#[serial_test::parallel]
 fn test_subagent_tool_line_narrow_omits_symbol() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(30); // Narrow: indent=0 gap=1
@@ -171,6 +174,7 @@ fn test_subagent_tool_line_narrow_omits_symbol() {
 /// error 工具行符号升级 status.error + ` — Failed` 错误词（P3 错误不弱化）；
 /// 原因行缩进与工具行同列对齐（设计文档 §5）。
 #[test]
+#[serial_test::parallel]
 fn test_subagent_running_with_failed_tool_shows_reason() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -244,6 +248,7 @@ fn test_subagent_running_with_failed_tool_shows_reason() {
 ///   （error_reason）优先，空时回退 child last_error 兜底；
 /// - completed 无失败 → ✓ + 结果摘要（历史断言保留）。
 #[test]
+#[serial_test::parallel]
 fn test_subagent_failed_reason_line_and_completed() {
     let grid = GridSpec::grid_for(80);
 
@@ -372,6 +377,7 @@ fn test_subagent_failed_reason_line_and_completed() {
 
 /// TuiCollapsedGroup：`▸ {title}`（title 含隐藏数；组后相邻 error → `· N failed`）。
 #[test]
+#[serial_test::parallel]
 fn test_collapsed_group_line() {
     let grid = GridSpec::grid_for(80);
     let mut group = TuiCollapsedGroup {
@@ -396,6 +402,7 @@ fn test_collapsed_group_line() {
 
 /// [D2] 组后相邻 error 数 >0 → 标题追加 `· N failed`（error 色 span），
 #[test]
+#[serial_test::parallel]
 fn test_expanded_group_renders_member_tools() {
     let grid = GridSpec::grid_for(80);
     let mut group = TuiCollapsedGroup {
@@ -419,6 +426,7 @@ fn test_expanded_group_renders_member_tools() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_collapsed_group_narrow_hides_whole_hint_within_grid_width() {
     let grid = GridSpec::grid_for(24);
     let mut group = TuiCollapsedGroup {
@@ -451,6 +459,7 @@ fn test_collapsed_group_narrow_hides_whole_hint_within_grid_width() {
 
 /// 与 `+N −M` 计数（diff_change_summary）不混淆。
 #[test]
+#[serial_test::parallel]
 fn test_collapsed_group_line_with_failed_count() {
     let grid = GridSpec::grid_for(80);
     let mut group = TuiCollapsedGroup {
@@ -497,6 +506,7 @@ fn test_collapsed_group_line_with_failed_count() {
 
 /// Divider 接续左侧竖线，下一行直接是用户正文。
 #[test]
+#[serial_test::parallel]
 fn test_divider_lines() {
     let grid = GridSpec::grid_for(80);
     let sem = THEME_ATOM.state().read().semantic;
@@ -552,6 +562,7 @@ fn test_divider_lines() {
 
 /// TuiTodoSummary：`◼ {3/7 tasks · Running tests}`。
 #[test]
+#[serial_test::parallel]
 fn test_todo_summary_line() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);

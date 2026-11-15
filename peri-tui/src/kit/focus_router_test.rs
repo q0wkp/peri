@@ -24,6 +24,17 @@ fn key(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
     }
 }
 
+/// 恢复 `reset_focus_atoms()` 触及的全局 atom；用例开头安装，断言 panic 也恢复。
+#[cfg(test)]
+fn restore_focus_atoms() -> crate::kit::test_support::AtomsGuard {
+    crate::kit::test_support::AtomsGuard::new()
+        .take(&POPUP_KIND)
+        .take(&AT_MENTION_ACTIVE)
+        .take(&SLASH_HINT_ACTIVE)
+        .take(&atoms::OPEN_PANELS)
+        .take(&atoms::ACTIVE_PANEL)
+}
+
 #[cfg(test)]
 fn reset_focus_atoms() {
     atoms::init_atoms();
@@ -36,6 +47,7 @@ fn reset_focus_atoms() {
 #[test]
 #[serial]
 fn test_active_layer_priority_popup_over_inline_and_panel() {
+    let _atoms = restore_focus_atoms();
     reset_focus_atoms();
     open_panel(PanelKind::Model);
     *SLASH_HINT_ACTIVE.state().write() = true;
@@ -46,6 +58,7 @@ fn test_active_layer_priority_popup_over_inline_and_panel() {
 #[test]
 #[serial]
 fn test_active_layer_priority_inline_over_panel() {
+    let _atoms = restore_focus_atoms();
     reset_focus_atoms();
     open_panel(PanelKind::Model);
     *AT_MENTION_ACTIVE.state().write() = true;
@@ -55,6 +68,7 @@ fn test_active_layer_priority_inline_over_panel() {
 #[test]
 #[serial]
 fn test_active_layer_panel_before_input() {
+    let _atoms = restore_focus_atoms();
     reset_focus_atoms();
     open_panel(PanelKind::Model);
     assert_eq!(active_layer(), FocusLayer::Panel);
@@ -63,6 +77,7 @@ fn test_active_layer_panel_before_input() {
 #[test]
 #[serial]
 fn test_active_layer_defaults_to_input() {
+    let _atoms = restore_focus_atoms();
     reset_focus_atoms();
     assert_eq!(active_layer(), FocusLayer::Input);
 }
@@ -72,6 +87,7 @@ fn test_active_layer_defaults_to_input() {
 #[test]
 #[serial]
 fn test_popup_owns_foreground_over_panel() {
+    let _atoms = restore_focus_atoms();
     reset_focus_atoms();
     open_panel(PanelKind::Mcp);
     assert!(!popup_owns_foreground());
@@ -113,6 +129,7 @@ fn test_message_accepts_only_ctrl_navigation_keys() {
 #[test]
 #[serial]
 fn test_input_rejects_when_panel_or_popup_active() {
+    let _atoms = restore_focus_atoms();
     reset_focus_atoms();
     open_panel(PanelKind::Model);
     assert!(!input_accepts_key(&key(
@@ -264,6 +281,7 @@ fn test_cycle_provider_macos_alt_shift_m() {
 #[test]
 #[serial]
 fn test_message_nav_tab_arrows_claimed_when_entry_focused() {
+    let _atoms = restore_focus_atoms();
     reset_focus_atoms();
     assert!(message_nav_accepts(
         &key(KeyCode::Tab, KeyModifiers::NONE),

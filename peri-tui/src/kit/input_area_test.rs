@@ -98,6 +98,7 @@ fn test_update_popup_prefix_mention_with_space_disables() {
 /// gap=1（Compact/Narrow）→ 3 列；gap=2（Wide/Standard）→ 4 列；
 /// prompt_and_border_width 各加右预留 2 列。
 #[test]
+#[serial_test::parallel]
 fn test_prompt_prefix_aligns_with_grid_content_start() {
     crate::kit::atoms::init_atoms();
     let narrow = GridSpec::grid_for(40); // Compact, gap=1
@@ -130,6 +131,7 @@ fn test_prompt_prefix_aligns_with_grid_content_start() {
 /// Slice 3b：composer 上方 queued 队列行——`· {text}` 截断 + `· · ·` 溢出行。
 /// 组件层先 take(QUEUE_VISIBLE_MAX=5) 再渲染：5 条 + 溢出标记 = 6 行。
 #[test]
+#[serial_test::parallel]
 fn test_build_queue_lines_caps_at_five_and_more_row() {
     crate::kit::atoms::init_atoms();
     let items: Vec<String> = (0..5).map(|i| format!("prompt {i}")).collect();
@@ -171,6 +173,7 @@ fn render_block_text(block: &Block<'static>, w: u16, h: u16) -> Vec<String> {
 
 /// Slice 3a：composer 标题/footer 行（§10）——show_top/show_bottom 组合。
 #[test]
+#[serial_test::parallel]
 fn test_build_composer_block_titles_and_degrades() {
     crate::kit::atoms::init_atoms();
     i18n::init(None);
@@ -395,6 +398,7 @@ fn test_readable_fg_contrast() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_build_session_title_line_has_palette_bg() {
     crate::kit::atoms::init_atoms();
     let line = build_session_title_line("修复登录");

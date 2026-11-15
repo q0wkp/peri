@@ -41,6 +41,19 @@ fn managed_fixture(dir: &Path, name: &str) -> PathBuf {
     file
 }
 
+/// 恢复 `reset_atoms()` 触及的全局 atom；用例开头安装，断言 panic 也恢复。
+fn restore_atoms() -> crate::kit::test_support::AtomsGuard {
+    crate::kit::test_support::AtomsGuard::new()
+        .replace(&IMAGE_PREVIEW_STATE, ImagePreviewState::Idle)
+        .take(&IMAGE_HOVER)
+        .take(&IMAGE_PREVIEW_HOVER)
+        .take(&INPUT_SNAPSHOT)
+        .take(&FOCUSED_ENTRY)
+        .take(&POPUP_KIND)
+        .take(&ACTIVE_PANEL)
+        .take(&crate::kit::atoms::VIEW_MODELS)
+}
+
 /// 重置预览相关全局 atom，防测试间污染。
 fn reset_atoms() {
     *IMAGE_PREVIEW_STATE.state().write() = ImagePreviewState::Idle;
@@ -167,6 +180,7 @@ fn view_models_with(text: &str) {
 #[test]
 #[serial]
 fn focus_image_path_uses_first_image_line() {
+    let _atoms = restore_atoms();
     reset_atoms();
     view_models_with("text\n@image /tmp/b.png\n@image /tmp/c.png");
     let focused = FocusedEntry { slot: 0, key: None };
@@ -180,6 +194,7 @@ fn focus_image_path_uses_first_image_line() {
 #[test]
 #[serial]
 fn focus_image_path_slot_guards() {
+    let _atoms = restore_atoms();
     reset_atoms();
     view_models_with("@image /tmp/b.png");
     // 越界 slot → None。
@@ -201,6 +216,7 @@ fn focus_image_path_slot_guards() {
 #[test]
 #[serial]
 fn resolve_preview_target_priority_hover_cursor_focus() {
+    let _atoms = restore_atoms();
     reset_atoms();
     // 仅 cursor 命中 → cursor 路径。
     *INPUT_SNAPSHOT.state().write() = InputSnapshot {
@@ -238,6 +254,7 @@ fn resolve_preview_target_priority_hover_cursor_focus() {
 #[test]
 #[serial]
 fn resolve_preview_target_ignores_unconfirmed_hover() {
+    let _atoms = restore_atoms();
     reset_atoms();
     *IMAGE_HOVER.state().write() = Some(ImageHoverState {
         row: 5,
@@ -258,6 +275,7 @@ fn resolve_preview_target_ignores_unconfirmed_hover() {
 #[test]
 #[serial]
 fn resolve_preview_target_occluded_returns_none() {
+    let _atoms = restore_atoms();
     reset_atoms();
     *INPUT_SNAPSHOT.state().write() = InputSnapshot {
         text: "@image /cur.png".to_string(),
@@ -291,6 +309,7 @@ fn preview_geometry_saturates_small_terminals() {
 #[test]
 #[serial]
 fn request_preview_managed_reaches_ready() {
+    let _atoms = restore_atoms();
     reset_atoms();
     crate::i18n::init(Some("en"));
     let dir = tempfile::tempdir().unwrap();
@@ -320,6 +339,7 @@ fn request_preview_managed_reaches_ready() {
 #[test]
 #[serial]
 fn request_preview_manual_degrades_without_decode() {
+    let _atoms = restore_atoms();
     reset_atoms();
     crate::i18n::init(Some("en"));
     let dir = tempfile::tempdir().unwrap();
@@ -350,6 +370,7 @@ fn request_preview_manual_degrades_without_decode() {
 #[test]
 #[serial]
 fn request_preview_validation_failure_errors() {
+    let _atoms = restore_atoms();
     reset_atoms();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("managed");
@@ -369,6 +390,7 @@ fn request_preview_validation_failure_errors() {
 #[test]
 #[serial]
 fn request_preview_invalid_path_errors() {
+    let _atoms = restore_atoms();
     reset_atoms();
     request_preview_with(Some("/nonexistent/nope.png"), None, |_| Err("unreachable"));
     assert!(
@@ -380,6 +402,7 @@ fn request_preview_invalid_path_errors() {
 #[test]
 #[serial]
 fn request_preview_none_clears_to_idle() {
+    let _atoms = restore_atoms();
     reset_atoms();
     // 先制造一个非 Idle 状态（直接写 atom，避免依赖解码时序）。
     *IMAGE_PREVIEW_STATE.state().write() = ImagePreviewState::Error {
@@ -401,6 +424,7 @@ fn request_preview_none_clears_to_idle() {
 #[test]
 #[serial]
 fn stale_decode_result_is_dropped() {
+    let _atoms = restore_atoms();
     reset_atoms();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("managed");
@@ -459,6 +483,7 @@ fn ready_state(path: PathBuf) -> ImagePreviewState {
 }
 
 #[test]
+#[serial_test::parallel]
 fn draw_preview_overlay_ready_transmits() {
     crate::i18n::init(Some("en"));
     let mut term = Terminal::new(TestBackend::new(40, 20)).unwrap();
@@ -499,6 +524,7 @@ fn draw_preview_overlay_ready_transmits() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn draw_preview_overlay_degraded_no_escape() {
     crate::i18n::init(Some("en"));
     let mut term = Terminal::new(TestBackend::new(40, 20)).unwrap();
@@ -553,6 +579,7 @@ fn draw_preview_overlay_idle_empty() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn draw_preview_overlay_pixel_disabled_meta_only() {
     crate::i18n::init(Some("en"));
     let mut term = Terminal::new(TestBackend::new(40, 20)).unwrap();
@@ -582,6 +609,7 @@ fn draw_preview_overlay_pixel_disabled_meta_only() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn draw_preview_overlay_unsupported_protocol_degrades() {
     crate::i18n::init(Some("en"));
     let mut term = Terminal::new(TestBackend::new(40, 20)).unwrap();
@@ -600,6 +628,7 @@ fn draw_preview_overlay_unsupported_protocol_degrades() {
 /// [方案 B] 无协议终端：像素区显示终端能力提示（而非静默空白），
 /// 且不 transmit。同时覆盖 ITerm2 disabled（同分支，§6.3）。
 #[test]
+#[serial_test::parallel]
 fn draw_preview_overlay_no_protocol_shows_hint() {
     crate::i18n::init(Some("en"));
     for protocol in [GraphicsProtocol::None, GraphicsProtocol::ITerm2] {
@@ -677,6 +706,7 @@ fn idle_does_not_clear_overlay_area() {
 #[test]
 #[serial]
 fn decode_uses_validated_buffer_not_reopened_path() {
+    let _atoms = restore_atoms();
     reset_atoms();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("managed");
@@ -707,6 +737,7 @@ fn decode_uses_validated_buffer_not_reopened_path() {
 /// F3 回归（§6.2-4）：overlay meta 行必须过 `sanitize_for_terminal`——文件名
 /// 含 ESC 等控制字符（macOS 允许）时，escape 不得随 meta 行进入终端 buffer。
 #[test]
+#[serial_test::parallel]
 fn preview_meta_line_sanitizes_control_chars() {
     crate::i18n::init(Some("en"));
     let mut term = Terminal::new(TestBackend::new(40, 20)).unwrap();

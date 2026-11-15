@@ -181,6 +181,7 @@ fn trusted_structured_dispatch_preserves_required_and_renders_marker() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn system_reminder_cjk_extreme_narrow_render_is_bounded_and_hides_metadata() {
     let vm = crate::kit::tui_render_unit::TuiSystemReminder::from_wire(reminder()).unwrap();
     let unit = TuiRenderUnit::TuiSystemReminder(vm);

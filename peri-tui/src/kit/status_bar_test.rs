@@ -28,6 +28,7 @@ fn test_preparing_label_only_while_preparing() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_permission_mode_color() {
     assert_eq!(
         permission_mode_color("accept-edit"),
@@ -181,6 +182,7 @@ fn row1_spans() -> (Vec<Span<'static>>, usize, usize) {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_model_click_areas_single_line_no_wrap() {
     let (spans, start, end) = row1_spans();
     // 宽度充足：不折行 → 词级 4 个区域全部在第 0 行
@@ -194,6 +196,7 @@ fn test_model_click_areas_single_line_no_wrap() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_model_click_areas_wrap_after_model_segment() {
     let (spans, start, end) = row1_spans();
     // 折行点落在模型段之后（窄终端 + 尾部内容变宽）：模型段完整在第 0 行，
@@ -210,6 +213,7 @@ fn test_model_click_areas_wrap_after_model_segment() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_model_click_areas_model_segment_cross_line() {
     // 模型段跨行（词级死区修复核心）：area_w=30 时 "opus" 整词折到第 1 行，
     // 模型段跨两行——每行各有区域，点击任意一行都能命中。
@@ -226,6 +230,7 @@ fn test_model_click_areas_model_segment_cross_line() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_model_click_areas_row_height_one_ignores_wrap() {
     // row_height=1（不折行）：即使内容超宽也全部在第 0 行（与渲染截断一致）
     let (spans, start, end) = row1_spans();
@@ -303,6 +308,7 @@ fn test_model_click_areas_cjk_width() {
 // ── 防御 ──────────────────────────────────────────────────────────────────
 
 #[test]
+#[serial_test::parallel]
 fn test_model_click_areas_defensive() {
     let (spans, start, end) = row1_spans();
     // 空 spans
@@ -340,6 +346,7 @@ fn render_status_bar_buffer(
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_model_click_areas_ground_truth_wrap_after_model() {
     // 主 bug 场景：area_w=61 时模型段 4 词全部在第 0 行、尾部折到第 1 行。
     // 模拟区域 vs 真实渲染：每个词首字符（= 区域起点 + 词前空白宽）逐位一致。
@@ -363,6 +370,7 @@ fn test_model_click_areas_ground_truth_wrap_after_model() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_model_click_areas_ground_truth_cross_line() {
     // 词级跨行：area_w=30 时 opus 整词折到第 1 行——模拟与真实渲染一致
     let (spans, start, end) = row1_spans();

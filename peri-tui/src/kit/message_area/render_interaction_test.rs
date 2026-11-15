@@ -4,6 +4,7 @@ use super::*;
 
 /// pending 态：标题（`Approval required`）+ 问题摘要 + 横向选项行 + 布局信息。
 #[test]
+#[serial_test::parallel]
 fn test_interaction_pending_permission_layout() {
     crate::i18n::init(Some("en"));
     let vm = TuiRenderUnit::TuiAskUserBlock(pending_permission_block());
@@ -33,6 +34,7 @@ fn test_interaction_pending_permission_layout() {
 
 /// Narrow 断点（§11）：interaction 选项垂直排列（每行一个），整行命中。
 #[test]
+#[serial_test::parallel]
 fn test_interaction_pending_narrow_vertical_options() {
     crate::i18n::init(Some("en"));
     let vm = TuiRenderUnit::TuiAskUserBlock(pending_permission_block());
@@ -58,6 +60,7 @@ fn test_interaction_pending_narrow_vertical_options() {
 /// completed + 手动折叠（Space → Collapsed）：单行结果（`✓ Allowed once`
 /// 风格：符号 + result）——自动策略已是 Expanded，Collapsed 只能来自用户覆盖。
 #[test]
+#[serial_test::parallel]
 fn test_interaction_completed_single_line_result() {
     crate::i18n::init(Some("en"));
     let vm = TuiRenderUnit::TuiAskUserBlock(completed_block("Allowed once"));
@@ -79,6 +82,7 @@ fn test_interaction_completed_single_line_result() {
 /// completed + 展开（用户需求：答毕默认完整展示）：结果行 + 问题摘要 +
 /// 选项行（选中项 ✓ 标记）。
 #[test]
+#[serial_test::parallel]
 fn test_interaction_completed_expanded_shows_question() {
     crate::i18n::init(Some("en"));
     let mut b = completed_block("Deny"); // result 与选项 "Deny" 精确匹配 → 选中标记
@@ -103,6 +107,7 @@ fn test_interaction_completed_expanded_shows_question() {
 /// 命中区间等于渲染行里 `[label]` 的实际列区间（不落在缩进空格上）；
 /// <60 列前缀回退基准形态（§9）时列区间同样跟随。
 #[test]
+#[serial_test::parallel]
 fn test_interaction_option_cols_follow_process_prefix_width() {
     crate::i18n::init(Some("en"));
     let vm = TuiRenderUnit::TuiAskUserBlock(pending_permission_block());

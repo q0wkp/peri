@@ -1,6 +1,7 @@
 //! 真实 handler → intent → scheduler 回归，不使用会强制补发的 dispatch_and_notify。
 use super::*;
 use crate::kit::stream_data::{TuiReasoningChunk, TuiTextChunk};
+use crate::kit::test_support::AtomsGuard;
 use crate::kit::tui_render_unit::{FoldKey, FoldState, TuiRenderUnit};
 use serial_test::serial;
 
@@ -9,6 +10,8 @@ struct ModeGuard {
     view: atoms::ViewModelsSnapshot,
     acp: atoms::AcpStateSnapshot,
     folds: std::collections::HashMap<FoldKey, FoldState>,
+    // 发布快照会附带 todo 摘要，前序用例留下的 TODO_ITEMS 会多出一条。
+    _todo: AtomsGuard,
 }
 impl ModeGuard {
     fn new(mode: &str) -> Self {
@@ -25,6 +28,7 @@ impl ModeGuard {
             view,
             acp,
             folds,
+            _todo: AtomsGuard::new().take(&crate::kit::atoms::TODO_ITEMS),
         }
     }
     fn set(mode: &str) {

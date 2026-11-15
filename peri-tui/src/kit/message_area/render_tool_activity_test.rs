@@ -4,6 +4,7 @@ use super::*;
 
 /// 完成工具：`✓ {Verb} {summary}` 单行；summary 用 muted 暗色（§6.4 不抢 label）。
 #[test]
+#[serial_test::parallel]
 fn test_tool_completed_single_line_with_path_color() {
     let grid = GridSpec::grid_for(80);
     let sem = THEME_ATOM.state().read().semantic;
@@ -27,6 +28,7 @@ fn test_tool_completed_single_line_with_path_color() {
 
 /// Bash 首行 command summary 用 muted 暗色；展开态显示 `$ command` 行（syntax.command）。
 #[test]
+#[serial_test::parallel]
 fn test_tool_bash_command_and_expanded_dollar_line() {
     let grid = GridSpec::grid_for(80);
     let sem = THEME_ATOM.state().read().semantic;
@@ -57,6 +59,7 @@ fn test_tool_bash_command_and_expanded_dollar_line() {
 
 /// 错误态：× + 明确错误词（Failed）；错误输出按 ` - Error: ` 拆行、error 色。
 #[test]
+#[serial_test::parallel]
 fn test_tool_error_splits_and_uses_error_color() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -104,6 +107,7 @@ fn test_tool_error_splits_and_uses_error_color() {
 
 /// 折叠的错误工具只保留失败状态行，错误正文等待用户显式展开。
 #[test]
+#[serial_test::parallel]
 fn test_tool_error_collapsed_hides_output() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -121,6 +125,7 @@ fn test_tool_error_collapsed_hides_output() {
 
 /// duration 三档：Wide/Standard 右对齐到屏幕右缘 / Compact+Narrow 隐藏。
 #[test]
+#[serial_test::parallel]
 fn test_tool_duration_three_tiers() {
     let card = TuiRenderUnit::TuiToolCard(tool_card("Read", "src/main.rs", false, false)); // 400ms → 0.4s
 
@@ -188,6 +193,7 @@ fn test_completed_duration_tiers() {
 /// 亚秒极快（< 50ms）工具行不渲染 duration：行在 summary 处结束，右侧不留
 /// 恒定 `0.0s`；同一路径下 ≥0.1s 的时长仍右对齐（对照）。
 #[test]
+#[serial_test::parallel]
 fn test_tool_card_subsecond_duration_omitted() {
     let grid = GridSpec::grid_for(120);
 
@@ -215,6 +221,7 @@ fn test_tool_card_subsecond_duration_omitted() {
 
 /// 运行中工具：braille 动画帧 + 活动行（无输出 dump）。
 #[test]
+#[serial_test::parallel]
 fn test_tool_running_symbol_and_no_output() {
     let grid = GridSpec::grid_for(80);
     let vm = TuiRenderUnit::TuiToolCard(tool_card("Bash", "sleep 6", false, true));
@@ -230,6 +237,7 @@ fn test_tool_running_symbol_and_no_output() {
 /// [Fix F6 §11] Compact/Narrow 断点：tool 展开体最多 2 行（§11「tool summary
 /// 最多 2 行」）；Standard 保持 4 行上限（TOOL_OUTPUT_MAX_LINES）。
 #[test]
+#[serial_test::parallel]
 fn test_tool_expanded_output_caps_by_breakpoint() {
     let output = (0..6)
         .map(|i| format!("out line {i}"))
@@ -272,6 +280,7 @@ fn test_tool_expanded_output_caps_by_breakpoint() {
 // ── System note（§6.6）────────────────────────────────────────────────
 
 #[test]
+#[serial_test::parallel]
 fn test_system_note_levels() {
     let grid = GridSpec::grid_for(80);
     let sem = THEME_ATOM.state().read().semantic;
@@ -330,6 +339,7 @@ fn test_system_note_levels() {
 // ── 统一 ToolRenderPlan：presentation 只投影专属内容 ────────────────────
 
 #[test]
+#[serial_test::parallel]
 fn skill_card_hides_raw_skill_output() {
     crate::i18n::init(Some("en"));
     let card = TuiToolCard {
@@ -363,6 +373,7 @@ fn skill_card_hides_raw_skill_output() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn todo_card_renders_progress_and_changes_without_raw_output() {
     crate::i18n::init(Some("en"));
     let card = TuiToolCard {
@@ -407,6 +418,7 @@ fn todo_card_renders_progress_and_changes_without_raw_output() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn todo_card_collapsed_hides_change_details() {
     crate::i18n::init(Some("en"));
     let card = TuiToolCard {
@@ -442,6 +454,7 @@ fn todo_card_collapsed_hides_change_details() {
 
 /// 语义卡在极端窄宽度（Narrow）下不 panic 且不超宽。
 #[test]
+#[serial_test::parallel]
 fn semantic_cards_respect_narrow_widths() {
     crate::i18n::init(Some("en"));
     for width in 1..=8u16 {
@@ -488,6 +501,7 @@ fn semantic_cards_respect_narrow_widths() {
 
 /// Glob/Grep 完成后头行显示 `— N matches`；错误态不显示。
 #[test]
+#[serial_test::parallel]
 fn test_glob_grep_header_match_suffix() {
     crate::i18n::init(Some("zh-CN"));
     let grid = GridSpec::grid_for(120);
@@ -533,6 +547,7 @@ fn test_glob_grep_header_match_suffix() {
 /// §6.7 completed 子 agent：组只渲染嵌套工具行（无单行组头/计数 meta），
 /// 工具行整体不越过消息区右缘（Wide 右对齐 duration 不被 fit 截断）。
 #[test]
+#[serial_test::parallel]
 fn test_subagent_completed_shows_tool_lines_only() {
     // subagent：completed + 1 个 Bash 工具 → 只渲染工具行
     let group = TuiRenderUnit::TuiSubAgentGroup(TuiSubAgentGroup {
@@ -594,6 +609,7 @@ index 1234567..89abcde 100644
 
 /// 120 列 Wide：header `path +N −M` + hunk 头 + 行号 gutter + patch 标记。
 #[test]
+#[serial_test::parallel]
 fn test_diff_block_renders_wide_120() {
     crate::i18n::init(Some("en"));
     let card = edit_card_with_diff(EDIT_DIFF);
@@ -627,6 +643,7 @@ fn test_diff_block_renders_wide_120() {
 
 /// 80 列 Standard：行号 gutter 保留，代码不软换行（硬截断）。
 #[test]
+#[serial_test::parallel]
 fn test_diff_block_renders_standard_80() {
     crate::i18n::init(Some("en"));
     let long_diff = "\
@@ -655,6 +672,7 @@ fn test_diff_block_renders_standard_80() {
 
 /// 48 列 Compact：先隐藏行号 gutter，再裁切代码（§6.5「窄屏先隐行号」）。
 #[test]
+#[serial_test::parallel]
 fn test_diff_block_hides_gutter_at_48() {
     crate::i18n::init(Some("en"));
     let card = edit_card_with_diff(EDIT_DIFF);
@@ -689,6 +707,7 @@ fn test_diff_block_hides_gutter_at_48() {
 
 /// 截断指示：>8 change 行 → `… +N more lines`（§6.5）。
 #[test]
+#[serial_test::parallel]
 fn test_diff_block_more_lines_indicator() {
     crate::i18n::init(Some("en"));
     let mut text = String::from("--- a/x\n+++ b/x\n@@ -1,20 +1,20 @@\n");
@@ -711,6 +730,7 @@ fn test_diff_block_more_lines_indicator() {
 
 /// 解析失败（非 diff 输出）→ diff=None → 渲染保持历史行为（无 diff 块）。
 #[test]
+#[serial_test::parallel]
 fn test_diff_block_falls_back_when_unparsable() {
     crate::i18n::init(Some("en"));
     let mut card = tool_card("Edit", "src/x.rs", false, false);
@@ -729,6 +749,7 @@ fn test_diff_block_falls_back_when_unparsable() {
 /// workspace Bash（effective name）展开态仍显示 `$ command` 行 + 分隔线，
 /// 且渲染文本与裸名卡片**逐位一致**。
 #[test]
+#[serial_test::parallel]
 fn workspace_bash_card_keeps_dollar_prefix() {
     let grid = GridSpec::grid_for(80);
     let render = |tool_name: &str| {
@@ -759,6 +780,7 @@ fn workspace_bash_card_keeps_dollar_prefix() {
 /// workspace Read / Edit（effective name）完成态头行后缀与裸名一致：
 /// Read `— N lines`、Edit `· +N · -M`。
 #[test]
+#[serial_test::parallel]
 fn workspace_read_and_edit_cards_keep_header_suffix() {
     let grid = GridSpec::grid_for(120);
 

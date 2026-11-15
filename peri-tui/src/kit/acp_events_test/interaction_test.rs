@@ -1,4 +1,5 @@
 use super::*;
+use crate::kit::test_support::AtomsGuard;
 
 // ── [Slice 4 §6.8] Interaction block：生产创建点 + 结果回写 + 折叠表 ──
 
@@ -34,6 +35,7 @@ fn ask_user_block_of(snapshot: &ViewModelsSnapshot, idx: usize) -> &TuiAskUserBl
 #[test]
 #[serial]
 fn test_hitl_pending_injects_pending_permission_block() {
+    let _popup = AtomsGuard::new().take(&crate::kit::atoms::POPUP_KIND);
     let mut state = make_interaction_state();
     let hp = HitlPending {
         tool_name: "Bash".into(),
@@ -72,6 +74,7 @@ fn test_hitl_pending_injects_pending_permission_block() {
 #[test]
 #[serial]
 fn test_hitl_handler_publishes_same_composite_to_atom_and_block() {
+    let _popup = AtomsGuard::new().take(&crate::kit::atoms::POPUP_KIND);
     let mut state = make_interaction_state();
     dispatch_and_notify(
         &mut state,
@@ -100,6 +103,7 @@ fn test_hitl_handler_publishes_same_composite_to_atom_and_block() {
 #[test]
 #[serial]
 fn test_hitl_pending_duplicate_request_id_not_reinjected() {
+    let _popup = AtomsGuard::new().take(&crate::kit::atoms::POPUP_KIND);
     let mut state = make_interaction_state();
     let hp = || HitlPending {
         tool_name: "Bash".into(),
@@ -193,6 +197,7 @@ fn test_ask_user_handler_publishes_same_composite_and_question_ids() {
 #[test]
 #[serial]
 fn test_queued_interaction_blocks_keep_origin_request_ids() {
+    let _popup = AtomsGuard::new().take(&crate::kit::atoms::POPUP_KIND);
     let mut state = make_interaction_state();
     for (token, id) in [(1, "A"), (2, "B")] {
         dispatch_and_notify(
@@ -294,6 +299,7 @@ fn test_interaction_resolved_writes_back_pending_block() {
 #[test]
 #[serial]
 fn test_interaction_resolved_mismatched_request_id_noop() {
+    let _popup = AtomsGuard::new().take(&crate::kit::atoms::POPUP_KIND);
     let mut state = make_interaction_state();
     dispatch_and_notify(
         &mut state,

@@ -71,6 +71,7 @@ fn rect_contains(x: u16, y: u16, rect: Rect) -> bool {
 mod tests {
     use crate::app::panel_types::PanelKind;
     use crate::kit::atoms::{ACTIVE_PANEL, PANEL_AREA, POPUP_AREA, POPUP_KIND, PopupKind};
+    use crate::kit::test_support::AtomsGuard;
     use ratatui_kit::ratatui::layout::Rect;
     use serial_test::serial;
 
@@ -82,9 +83,19 @@ mod tests {
         *PANEL_AREA.state().write() = None;
     }
 
+    /// 恢复 `reset()` 触及的全局 atom；每个用例开头安装，断言 panic 也恢复。
+    fn restore_atoms() -> AtomsGuard {
+        AtomsGuard::new()
+            .take(&POPUP_KIND)
+            .take(&ACTIVE_PANEL)
+            .take(&POPUP_AREA)
+            .take(&PANEL_AREA)
+    }
+
     #[test]
     #[serial]
     fn no_foreground_not_occluded() {
+        let _atoms = restore_atoms();
         reset();
         assert!(!super::is_occluded());
     }
@@ -92,6 +103,7 @@ mod tests {
     #[test]
     #[serial]
     fn popup_occludes() {
+        let _atoms = restore_atoms();
         reset();
         *POPUP_KIND.state().write() = Some(PopupKind::Confirm);
         assert!(super::is_occluded());
@@ -100,6 +112,7 @@ mod tests {
     #[test]
     #[serial]
     fn panel_occludes() {
+        let _atoms = restore_atoms();
         reset();
         *ACTIVE_PANEL.state().write() = Some(PanelKind::Config);
         assert!(super::is_occluded());
@@ -108,6 +121,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_is_occluded_unchanged_popup_and_panel() {
+        let _atoms = restore_atoms();
         reset();
         assert!(!super::is_occluded());
         *POPUP_KIND.state().write() = Some(PopupKind::Confirm);
@@ -122,6 +136,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_bg_bar_click_blocked_when_popup() {
+        let _atoms = restore_atoms();
         reset();
         *POPUP_KIND.state().write() = Some(PopupKind::Confirm);
         assert!(!super::bg_bar_click_allowed(true));
@@ -131,6 +146,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_bg_bar_click_allowed_panel_open_hit_row() {
+        let _atoms = restore_atoms();
         reset();
         *ACTIVE_PANEL.state().write() = Some(PanelKind::SubAgentDetail);
         assert!(super::is_occluded());
@@ -140,6 +156,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_bg_bar_click_miss_outside_row_ignored() {
+        let _atoms = restore_atoms();
         reset();
         assert!(super::bg_bar_click_allowed(true));
         assert!(!super::bg_bar_click_allowed(false));
@@ -152,6 +169,7 @@ mod tests {
     #[test]
     #[serial]
     fn scroll_no_popup_or_panel_not_occluded() {
+        let _atoms = restore_atoms();
         reset();
         assert!(!super::occludes_scroll(1, 1));
     }
@@ -159,6 +177,7 @@ mod tests {
     #[test]
     #[serial]
     fn scroll_inside_popup_rect_occluded() {
+        let _atoms = restore_atoms();
         reset();
         *POPUP_KIND.state().write() = Some(PopupKind::Hitl);
         *POPUP_AREA.state().write() = Some(Rect::new(10, 5, 60, 20));
@@ -175,6 +194,7 @@ mod tests {
     #[test]
     #[serial]
     fn scroll_outside_popup_rect_passthrough() {
+        let _atoms = restore_atoms();
         reset();
         *POPUP_KIND.state().write() = Some(PopupKind::Hitl);
         *POPUP_AREA.state().write() = Some(Rect::new(10, 5, 60, 20));
@@ -185,6 +205,7 @@ mod tests {
     #[test]
     #[serial]
     fn scroll_popup_without_registered_rect_occluded() {
+        let _atoms = restore_atoms();
         reset();
         // ModelQuickSwitch 等自定位小层不登记 POPUP_AREA → 保守遮挡
         *POPUP_KIND.state().write() = Some(PopupKind::ModelQuickSwitch);
@@ -195,6 +216,7 @@ mod tests {
     #[test]
     #[serial]
     fn scroll_panel_open_occluded_without_area() {
+        let _atoms = restore_atoms();
         reset();
         // 面板打开但尚未登记区域（首帧前）→ 保守遮挡
         *ACTIVE_PANEL.state().write() = Some(PanelKind::Config);
@@ -205,6 +227,7 @@ mod tests {
     #[test]
     #[serial]
     fn scroll_panel_inside_area_occluded() {
+        let _atoms = restore_atoms();
         reset();
         *ACTIVE_PANEL.state().write() = Some(PanelKind::Model);
         *PANEL_AREA.state().write() = Some(Rect::new(0, 20, 120, 15));
@@ -221,6 +244,7 @@ mod tests {
     #[test]
     #[serial]
     fn scroll_panel_outside_area_passthrough() {
+        let _atoms = restore_atoms();
         reset();
         *ACTIVE_PANEL.state().write() = Some(PanelKind::ThreadBrowser);
         *PANEL_AREA.state().write() = Some(Rect::new(0, 20, 120, 15));
@@ -231,6 +255,7 @@ mod tests {
     #[test]
     #[serial]
     fn scroll_popup_and_panel_any_occludes() {
+        let _atoms = restore_atoms();
         reset();
         // 弹窗+面板同时打开：弹窗矩形外但面板区域内 → 仍遮挡（面板滚轮归仲裁）
         *POPUP_KIND.state().write() = Some(PopupKind::Hitl);

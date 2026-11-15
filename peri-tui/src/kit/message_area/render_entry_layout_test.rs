@@ -5,6 +5,7 @@ use crate::kit::message_area::grid::TextLineSource;
 
 /// 宽度为 1 时，所有 VM 变体的 vm_to_lines 不应 panic。
 #[test]
+#[serial_test::parallel]
 fn test_vm_to_lines_all_variants_width_1() {
     let empty_bubble = TuiRenderUnit::TuiAssistantBubble(
         TuiAssistantBubble {
@@ -179,6 +180,7 @@ fn prefix_col(line: &Line<'static>, n: usize) -> usize {
 /// 符号、续行标记为 `│`，标记列同为 col1 的文本竖线位右移 `indent`（col3 0 起）；
 /// 文本竖线不再贯穿过程段，转场由台阶行连接（§6）。
 #[test]
+#[serial_test::parallel]
 fn test_prefix_structure_first_and_continuation() {
     let grid = GridSpec::grid_for(80); // Standard: outer=1 accent=1 gap=2 indent=2 content=74
     let vm = TuiRenderUnit::TuiToolCard(tool_card("Read", "src/main.rs", false, false));
@@ -240,6 +242,7 @@ fn test_prefix_structure_first_and_continuation() {
 /// 映射不因标记字形变化；duration 仍右对齐到带右缘（§8，跳过最右滚动条列）。
 /// 转场台阶行（§6）独立成行、宽 4，不占过程区前缀列。
 #[test]
+#[serial_test::parallel]
 fn test_process_prefix_equal_width_and_duration_flush_right() {
     let grid = GridSpec::grid_for(80);
     let tool = TuiRenderUnit::TuiToolCard(TuiToolCard {
@@ -303,6 +306,7 @@ fn test_process_prefix_equal_width_and_duration_flush_right() {
 /// Compact/Narrow（<60 列）过程区前缀回退基准形态（§9）：无缩进、无台阶，
 /// 逐列与改动前一致。
 #[test]
+#[serial_test::parallel]
 fn test_compact_and_narrow_process_prefix_falls_back_to_baseline() {
     use super::helpers::{cont_prefix, first_prefix, process_cont_prefix, process_first_prefix};
     let dim = THEME_ATOM.state().read().semantic.text.dim;
@@ -407,6 +411,7 @@ fn test_compact_and_narrow_process_prefix_falls_back_to_baseline() {
 /// 用户与 AI 正文左侧竖线分别使用次等色和主题色——长回复竖线在文本区 accent
 /// 列，短回复并入过程带后竖线退到标记列，两者同取 `accent`。
 #[test]
+#[serial_test::parallel]
 fn test_message_line_colors_follow_role_tokens() {
     let grid = GridSpec::grid_for(80);
     let sem = THEME_ATOM.state().read().semantic;
@@ -459,6 +464,7 @@ fn test_message_line_colors_follow_role_tokens() {
 
 /// Narrow 断点：首行 accent 符号退化为 dim bullet（§11）。
 #[test]
+#[serial_test::parallel]
 fn test_narrow_accent_bullet() {
     let grid = GridSpec::grid_for(30); // Narrow
     let vm = TuiRenderUnit::TuiToolCard(tool_card("Read", "src/main.rs", false, false));
@@ -473,6 +479,7 @@ fn test_narrow_accent_bullet() {
 /// 分层列坐标（§2/§3）：user/AI 长正文留在基准列（col4）；过程区 entry（工具卡、
 /// 短回复 AI 正文）起点右移 `indent` 到 col6。
 #[test]
+#[serial_test::parallel]
 fn test_text_zone_baseline_and_process_zone_indent_columns() {
     let grid = GridSpec::grid_for(80);
     let text_col = grid.first_prefix_width();
@@ -545,6 +552,7 @@ fn test_text_zone_baseline_and_process_zone_indent_columns() {
 /// （assistant 正文 → `accent` / divider → `text.secondary`），entry 内部
 /// （reasoning → 正文）台阶用正文色。
 #[test]
+#[serial_test::parallel]
 fn test_step_line_color_follows_text_line() {
     let grid = GridSpec::grid_for(80);
     let sem = THEME_ATOM.state().read().semantic;
@@ -731,6 +739,7 @@ fn test_step_line_color_follows_text_line() {
 /// 系统提醒属过程区 entry（§7）：入口台阶独立成行、标题列与续行内容同列
 /// （§3/§5）；<60 列回退基准形态（§9）——提醒行不留在文本基准列。
 #[test]
+#[serial_test::parallel]
 fn test_system_reminder_renders_in_process_zone() {
     crate::i18n::init(Some("en"));
     let mut reminder = TuiSystemReminder::legacy("first line\nsecond line".into());
@@ -815,6 +824,7 @@ fn test_system_reminder_renders_in_process_zone() {
 /// `s ∈ {60, 61, 62}` 时 `content_total ∈ {75, 76, 77}` > 74（旧上限）且
 /// `used + 2 + 4 ≤ 79`（duration 仍右对齐）。
 #[test]
+#[serial_test::parallel]
 fn test_summary_fit_keeps_duration_intact_and_flush_right() {
     let grid = GridSpec::grid_for(80);
     for summary_len in [60usize, 61, 62] {

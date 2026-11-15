@@ -172,6 +172,7 @@ fn test_cached_parse_multiple_progressive_appends() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_cached_parse_unclosed_code_block_not_persisted_but_still_correct() {
     // [回归测试] text 以未闭合 code block 结尾（fence 数为奇数，sanitized 补闭合）。
     // [新契约] 任意输入都可持久化；但补全的闭合 fence 会破坏下次追加的前缀匹配
@@ -268,6 +269,7 @@ fn test_cached_parse_does_not_persist_unstable_suffix() {
 /// 与全量解析一致。覆盖尾部块回滚、表头翻转失效、表格增长失效、列表哨兵移位
 /// 等全部增量路径的组合。
 #[test]
+#[serial_test::parallel]
 fn test_cached_streaming_every_frame_matches_full_parse() {
     let mut cache = MarkdownRenderCache::default();
     let tokens: Vec<&str> = vec![
@@ -392,6 +394,7 @@ fn test_cached_list_lazy_continuation_grows() {
 
 /// [回归测试] 标题同行增长：`# h` → `# h x` 是同一 Heading block 内容变化。
 #[test]
+#[serial_test::parallel]
 fn test_cached_heading_same_line_growth() {
     let mut cache = MarkdownRenderCache::default();
     for (i, text) in ["# h", "# h x", "# h xy"].iter().enumerate() {
@@ -408,6 +411,7 @@ fn test_cached_heading_same_line_growth() {
 /// [回归测试] 缩进代码块增长：`    a` → `    a\n    b` 是同一 CodeBlock 行数变化
 /// （渲染从单行 inline 变为多行 │ 前缀），续跑必须重渲。
 #[test]
+#[serial_test::parallel]
 fn test_cached_indented_code_block_grows() {
     let mut cache = MarkdownRenderCache::default();
     for (i, text) in ["    a", "    a\n    b", "    a\n    b\n    c"]
@@ -461,6 +465,7 @@ fn test_cached_rule_flips_to_paragraph() {
 /// [回归测试] 已闭合代码块 + 同行追加：`\`\`\`\ncode\n\`\`\``（无尾换行）追加文本
 /// 会并入代码块内容（fence 破坏），必须重渲而非跳过旧 CodeBlock。
 #[test]
+#[serial_test::parallel]
 fn test_cached_closed_code_block_same_line_append() {
     let mut cache = MarkdownRenderCache::default();
     let t1 = "```rust\ncode\n```";
@@ -484,6 +489,7 @@ fn test_cached_closed_code_block_same_line_append() {
 /// [回归测试] 已闭合代码块是稳定中间块：代码块后追加文本（换行分隔），
 /// 代码块内容不变，续跑只处理新段落。
 #[test]
+#[serial_test::parallel]
 fn test_cached_closed_code_block_then_text_appended() {
     let mut cache = MarkdownRenderCache::default();
     let t1 = "```rust\ncode\n```\n\npara1";
@@ -639,6 +645,7 @@ fn test_cached_table_header_streamed_before_separator() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_incremental_reference_definition_keeps_reference_region_mutable() {
     let mut cache = MarkdownRenderCache::default();
     let initial = "[foo]\n\n";
@@ -713,6 +720,7 @@ fn test_rendered_chunks_fixed_length_more_publications_do_not_reparse_prefix() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_terminal_barrier_matches_full_reference_for_streaming_matrix() {
     let cases = [
         "prose with 中文 and a verylongwordwithoutanybreakpoint\n\nnext",
@@ -757,6 +765,7 @@ fn test_terminal_barrier_matches_full_reference_for_streaming_matrix() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_unclosed_fence_stays_mutable_until_closed() {
     let mut cache = MarkdownRenderCache::default();
     let first = parse_markdown_chunks_cached(

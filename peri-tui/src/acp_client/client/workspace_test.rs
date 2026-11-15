@@ -251,6 +251,7 @@ async fn continue_queries_exact_workspace_directory_and_distinguishes_no_candida
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn continue_query_failure_blocks_ensure_until_explicit_new_session() {
     let (client, server) = client();
     client.reserve_startup_restore().await;
@@ -304,6 +305,7 @@ async fn unsupported_context_version_cannot_be_used_for_execution() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn failed_input_initialization_closes_loaded_session_and_blocks_prompt() {
     let (client, server) = client();
     client

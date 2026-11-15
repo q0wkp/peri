@@ -7,6 +7,7 @@ use super::*;
 /// AssistantBubble 的正文后、尾随空行前追加复制按钮行：行首是正文竖线前缀
 /// （左缘时间线不断链），按钮块右对齐在 content 列右缘。
 #[test]
+#[serial_test::parallel]
 fn test_assistant_bubble_renders_copy_button() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -52,6 +53,7 @@ fn test_assistant_bubble_renders_copy_button() {
 
 /// 宽度不足时按钮行会折行 → 不渲染按钮（也不返回布局）。
 #[test]
+#[serial_test::parallel]
 fn test_copy_button_hidden_when_narrow() {
     crate::i18n::init(Some("en"));
     let vm = assistant_bubble_with_text(&"x".repeat(401), 2);
@@ -78,6 +80,7 @@ fn test_copy_button_hidden_for_empty_text() {
 
 /// UserBubble 不渲染复制按钮（仅 AI 回复）。
 #[test]
+#[serial_test::parallel]
 fn test_copy_button_hidden_for_user_bubble() {
     let vm = TuiRenderUnit::TuiUserBubble(crate::kit::tui_render_unit::TuiUserBubble {
         text: "my input".to_string(),
@@ -98,6 +101,7 @@ fn test_copy_button_hidden_for_user_bubble() {
 
 /// 嵌套渲染（render_copy_button=false）不渲染复制按钮。
 #[test]
+#[serial_test::parallel]
 fn test_copy_button_hidden_in_nested_render() {
     crate::i18n::init(Some("en"));
     let vm = assistant_bubble_with_text(&"x".repeat(401), 5);
@@ -108,6 +112,7 @@ fn test_copy_button_hidden_in_nested_render() {
 
 /// 短文本（≤400 字符）不渲染复制按钮。
 #[test]
+#[serial_test::parallel]
 fn test_copy_button_hidden_for_short_text() {
     crate::i18n::init(Some("en"));
     for text in ["hello world".to_string(), "x".repeat(400)] {
@@ -130,6 +135,7 @@ fn test_copy_button_hidden_for_short_text() {
 /// 到达渲染层后会被视口 Paragraph 二次折行，折出的行丢失 `│` 竖线前缀
 /// （左侧竖线被打断）。
 #[test]
+#[serial_test::parallel]
 fn test_assistant_md_paragraph_lines_stay_within_viewport() {
     let grid = GridSpec::grid_for(80); // content = 74，前缀 = 6
     let text = format!("{} 结尾", "word ".repeat(40)); // 200+ 字符超宽行
@@ -167,6 +173,7 @@ fn test_assistant_md_paragraph_lines_stay_within_viewport() {
 /// [Fix] 全块类型（heading / list / code / 段落 + 行内样式）超宽行都在
 /// convert 阶段折行：每行（前缀 + 内容）≤ 视口宽度，竖线前缀连续。
 #[test]
+#[serial_test::parallel]
 fn test_assistant_md_all_block_types_stay_within_viewport() {
     let grid = GridSpec::grid_for(80);
     let text = [
@@ -215,6 +222,7 @@ fn test_assistant_md_all_block_types_stay_within_viewport() {
 
 /// [Fix] 折行后的行语义复制仍剥离 `│ ` gutter——复制文本不含 UI chrome。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_wrapped_md_line_strips_prefix() {
     let grid = GridSpec::grid_for(60); // 窄 content，保证段落折行
     let text = format!("{} 结尾", "word ".repeat(40));
@@ -255,6 +263,7 @@ fn test_semantic_wrapped_md_line_strips_prefix() {
 
 /// 独占图片段：渲染输出带 │ 前缀、独占段前后各有一空行（§3.5 间隙规则）。
 #[test]
+#[serial_test::parallel]
 fn test_image_standalone_segment_rendering() {
     let vm = assistant_bubble_with_text("before\n\n![a](u)\n\nafter", 7);
     let mut cache = crate::kit::markdown::MarkdownRenderCache::default();
@@ -277,6 +286,7 @@ fn test_image_standalone_segment_rendering() {
 
 /// 行内图片段：前后无空行（拆段后仍属同一视觉段落，§3.5 行内规则）。
 #[test]
+#[serial_test::parallel]
 fn test_image_inline_segment_no_gap() {
     let vm = assistant_bubble_with_text("before ![a](u) after", 8);
     let mut cache = crate::kit::markdown::MarkdownRenderCache::default();
@@ -313,6 +323,7 @@ fn test_image_inline_segment_no_gap() {
 /// （§3.5「独占段前后有空行」）——同段多图已在 convert 层合并为单段，
 /// 此处 [Image, Image] 跨段走默认 gap 规则。
 #[test]
+#[serial_test::parallel]
 fn test_image_cross_paragraph_rendering() {
     let vm = assistant_bubble_with_text("![a](u)\n\n![b](v)", 7);
     let mut cache = crate::kit::markdown::MarkdownRenderCache::default();
@@ -343,6 +354,7 @@ fn test_image_cross_paragraph_rendering() {
 /// [P1-1] 同段多图 `![a](u) ![b](v)`：合并为单段 → 两降级行连续无空行
 /// （convert 层合并，render 层默认规则不误加空行）。
 #[test]
+#[serial_test::parallel]
 fn test_image_same_paragraph_multiple_no_gap() {
     let vm = assistant_bubble_with_text("![a](u) ![b](v)", 7);
     let mut cache = crate::kit::markdown::MarkdownRenderCache::default();
@@ -365,6 +377,7 @@ fn test_image_same_paragraph_multiple_no_gap() {
 
 /// 顶层列表项之间恰好一行空行（终态路径）。
 #[test]
+#[serial_test::parallel]
 fn test_top_level_list_items_separated_by_blank_line() {
     let vm = assistant_bubble_with_text("- alpha\n- beta\n- gamma", 80);
     let mut cache = crate::kit::markdown::MarkdownRenderCache::default();
@@ -394,6 +407,7 @@ fn test_top_level_list_items_separated_by_blank_line() {
 /// 嵌套列表在渲染层保持紧凑：子项紧跟父项，回到下一个顶层项时插空行
 /// （流式路径；列表不进入 stable chunk，全部在可变尾部渲染）。
 #[test]
+#[serial_test::parallel]
 fn test_nested_list_items_stay_compact_between_top_level_items() {
     let vm = TuiRenderUnit::TuiAssistantBubble(
         TuiAssistantBubble {
@@ -447,6 +461,7 @@ fn test_nested_list_items_stay_compact_between_top_level_items() {
 /// 旧 `retain_and_wrap` 在空 lines 的 chunk 上越界索引 → TUI panic
 /// （`index out of bounds: the len is 0 but the index is 0`）。
 #[test]
+#[serial_test::parallel]
 fn test_assistant_bubble_resize_rebuilds_stable_chunks_without_panic() {
     let vm = TuiRenderUnit::TuiAssistantBubble(
         TuiAssistantBubble {
@@ -495,6 +510,7 @@ fn test_assistant_bubble_resize_rebuilds_stable_chunks_without_panic() {
 /// stable 渲染路径只处理 `MarkdownSegment::Text`；表格段冻结进 stable 后
 /// 既渲染为空（内容丢失），又会在宽度变化时触发空 chunk 越界。
 #[test]
+#[serial_test::parallel]
 fn test_streaming_table_without_leading_pipe_stays_visible() {
     let vm = TuiRenderUnit::TuiAssistantBubble(
         TuiAssistantBubble {

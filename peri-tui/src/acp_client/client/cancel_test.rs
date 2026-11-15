@@ -28,6 +28,7 @@ async fn cancel_without_session_is_an_error() {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn managed_cancel_preserves_matching_terminal_but_rejects_duplicate() {
     let (transport, server) = mpsc_transport_pair();
     let (client, notifications, mut rx) = AcpTuiClient::new(transport);

@@ -290,6 +290,7 @@ fn line_text(line: &ratatui_kit::ratatui::text::Line<'_>) -> String {
 
 /// 面板内容区行数预测：终端 24/40/60 → 18/26/26（主题 max_height=28）。
 #[test]
+#[serial_test::parallel]
 fn content_rows_prediction_matches_panel_overlay() {
     assert_eq!(panel_content_rows(24), 18);
     assert_eq!(panel_content_rows(40), 26);
@@ -298,6 +299,7 @@ fn content_rows_prediction_matches_panel_overlay() {
 
 /// 可见槽位由内容区行数推导；5 项在高度 40 时全部显示，高度 24 时只显示 4 项。
 #[test]
+#[serial_test::parallel]
 fn visible_slots_follow_panel_height() {
     let list = providers(5);
 
