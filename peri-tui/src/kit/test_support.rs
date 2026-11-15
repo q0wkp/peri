@@ -1,6 +1,7 @@
 //! 跨模块复用的测试 guard，仅在 `cfg(test)` 下编译。
 
-use crate::kit::atoms::NOTIFICATION;
+use crate::kit::atoms::{ACP_STATE, INPUT_BUFFER, NOTIFICATION, PROGRAM_STATUS, RENDER_HEARTBEAT};
+use crate::kit::program_status::ProgramStatus;
 use ratatui_kit::prelude::Atom as AtomStatic;
 
 /// 进程级全局 atom 的保存/恢复：设置前提值，Drop 时按逆序原样放回（含 panic）。
@@ -63,4 +64,16 @@ impl NotificationGuard {
             .as_ref()
             .map(|notice| notice.message.clone())
     }
+}
+
+/// notifier 在通知 channel 关闭时的兜底会写这几个 atom：清 loading 与排队输入、提示断连、
+/// 触发重渲染，并把程序状态置为 Error——过期的 Error 会让 `publish_turn_end` 不再改回
+/// Working。走到该路径的用例用它取走并恢复。
+pub(crate) fn notifier_close_atoms() -> AtomsGuard {
+    AtomsGuard::new()
+        .take(&NOTIFICATION)
+        .take(&ACP_STATE)
+        .take(&INPUT_BUFFER)
+        .replace(&PROGRAM_STATUS, ProgramStatus::Idle)
+        .replace(&RENDER_HEARTBEAT, RENDER_HEARTBEAT.get())
 }
