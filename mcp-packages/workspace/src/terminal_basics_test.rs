@@ -1,4 +1,7 @@
 use super::*;
+use peri_agent::agent::async_tasks::{
+    DEFAULT_TIMEOUT_ENV, FOREGROUND_DEFAULT_TIMEOUT_MS, FOREGROUND_MAX_TIMEOUT_MS, MAX_TIMEOUT_ENV,
+};
 
 #[tokio::test]
 async fn test_bash_nonzero_exit_code() {
@@ -175,25 +178,35 @@ async fn test_bash_timeout_clamped_to_minimum() {
     );
 }
 
-/// 显式超时 600000 毫秒被接受，但按前台上限 120000 执行（不再是无界/10 分钟）。
+/// 固定环境的前台规则（不读真实进程环境变量）。
+fn fixed_policy(env: &[(&'static str, &'static str)]) -> ShellTimeoutPolicy {
+    let env = env.to_vec();
+    ShellTimeoutPolicy::from_lookup(SessionAttendance::Attended, move |name| {
+        env.iter()
+            .find(|(key, _)| *key == name)
+            .map(|(_, value)| value.to_string())
+    })
+}
+
+/// 超过前台上限的请求被接受并按上限执行（不再是无界）。
 /// 命令本身瞬时完成，因此这里只验证请求被接受且正常执行。
 #[tokio::test]
 async fn test_bash_oversized_timeout_is_capped_by_foreground_maximum() {
     let _process_env = peri_mcp_common::process_env::lock().expect("process env lock");
+    let policy = fixed_policy(&[]);
     assert_eq!(
-        peri_agent::agent::async_tasks::parse_foreground_timeout(
-            &serde_json::json!({"timeout": 600000})
-        )
-        .expect("valid timeout"),
-        (FOREGROUND_MAX_TIMEOUT_MS, Some(600_000)),
+        policy
+            .parse_foreground(&serde_json::json!({"timeout": 3_000_000}))
+            .expect("valid timeout"),
+        (FOREGROUND_MAX_TIMEOUT_MS, Some(3_000_000)),
         "超过前台上限的请求必须界到上限"
     );
-    let tool = BashTool::new(std::env::temp_dir().to_str().unwrap());
+    let tool = BashTool::new(std::env::temp_dir().to_str().unwrap()).with_timeout_policy(policy);
     let result = tool
         .invoke(
             serde_json::json!({
                 "command": "echo ok",
-                "timeout": 600000
+                "timeout": 3_000_000
             }),
             peri_agent::tools::ToolContext::new(&[], "."),
         )
@@ -206,24 +219,22 @@ async fn test_bash_oversized_timeout_is_capped_by_foreground_maximum() {
 #[tokio::test]
 async fn test_bash_sync_timeout_zero_is_bounded_by_foreground_maximum() {
     let _process_env = peri_mcp_common::process_env::lock().expect("process env lock");
+    let policy = fixed_policy(&[]);
     assert_eq!(
-        peri_agent::agent::async_tasks::parse_foreground_timeout(
-            &serde_json::json!({"timeout": 0})
-        )
-        .expect("valid timeout"),
+        policy
+            .parse_foreground(&serde_json::json!({"timeout": 0}))
+            .expect("valid timeout"),
         (FOREGROUND_MAX_TIMEOUT_MS, Some(0)),
         "timeout: 0 必须界到前台上限，不能表示不超时"
     );
     assert_eq!(
-        peri_agent::agent::async_tasks::parse_foreground_timeout(&serde_json::json!({}))
+        policy
+            .parse_foreground(&serde_json::json!({}))
             .expect("missing timeout"),
-        (
-            peri_agent::agent::async_tasks::FOREGROUND_DEFAULT_TIMEOUT_MS,
-            None
-        )
+        (FOREGROUND_DEFAULT_TIMEOUT_MS, None)
     );
 
-    let tool = BashTool::new(std::env::temp_dir().to_str().unwrap());
+    let tool = BashTool::new(std::env::temp_dir().to_str().unwrap()).with_timeout_policy(policy);
     let output = tool
         .invoke_output(
             serde_json::json!({"command": "echo bounded", "timeout": 0}),
@@ -234,21 +245,22 @@ async fn test_bash_sync_timeout_zero_is_bounded_by_foreground_maximum() {
     assert!(output.text.contains("bounded"), "{}", output.text);
     let evidence = output.execution.expect("sync evidence");
     assert_eq!(evidence.status, ToolExecutionStatus::Completed);
-    assert_eq!(evidence.exit_code, Some(0));
 }
 
-/// 前台 `timeout: 0` 的真实上界（约 120s）：不早于前台上限 promote，
-/// 到上限后转后台并回传 task_id，取消时清理整个进程组。
-/// 需要约 2 分钟真实等待，故默认 `#[ignore]`；取证时用 `cargo test -- --ignored` 手动运行。
+/// 前台 `timeout: 0` 在上限处转后台：不早于上限、不晚于上限太多，回传 task_id，
+/// 回执写明被界到上限，取消时清理整个进程组。
+/// 用环境变量把默认与上限都压到 2s，真实等待约 2s。
 #[cfg(unix)]
 #[tokio::test]
-#[ignore = "需要约 120s 真实等待（前台上限），手动运行"]
-async fn test_foreground_timeout_zero_promotes_at_foreground_maximum() {
+async fn test_foreground_timeout_zero_moves_to_background_at_ceiling() {
     let _process_env = peri_mcp_common::process_env::lock().expect("process env lock");
     let registry = Arc::new(peri_mcp_common::create_local_task_manager());
-    let tool =
-        BashTool::new(std::env::temp_dir().to_str().unwrap()).with_task_manager(registry.clone());
-    let cap_secs = FOREGROUND_MAX_TIMEOUT_MS / 1000;
+    let tool = BashTool::new(std::env::temp_dir().to_str().unwrap())
+        .with_timeout_policy(fixed_policy(&[
+            (DEFAULT_TIMEOUT_ENV, "2000"),
+            (MAX_TIMEOUT_ENV, "2000"),
+        ]))
+        .with_task_manager(registry.clone());
 
     let start = Instant::now();
     let err = tool
@@ -261,24 +273,30 @@ async fn test_foreground_timeout_zero_promotes_at_foreground_maximum() {
         .to_string();
     let elapsed = start.elapsed();
 
-    assert!(err.contains("timed out"), "Err 应含 timed out: {err}");
+    assert!(
+        err.contains(
+            "Command did not complete within its 2s timeout and was moved to the background"
+        ),
+        "回执应写明实际生效秒数与转入后台: {err}"
+    );
     assert!(
         err.lines().any(|l| l.starts_with("task_id: ")),
-        "promote 应回传 task_id: {err}"
+        "转入后台应回传 task_id: {err}"
     );
+    assert!(err.contains("Live output"), "应给出输出位置: {err}");
     assert!(
         err.contains("cannot disable the timeout"),
         "应说明 `timeout: 0` 被界到前台上限: {err}"
     );
     assert!(
-        elapsed >= Duration::from_secs(cap_secs - 2),
-        "不应早于前台上限 promote，实际 {elapsed:?}"
+        elapsed >= Duration::from_millis(1800),
+        "不应早于前台上限转入后台，实际 {elapsed:?}"
     );
     assert!(
-        elapsed < Duration::from_secs(cap_secs + 30),
+        elapsed < Duration::from_secs(10),
         "不应晚于前台上限太多，实际 {elapsed:?}"
     );
-    assert_eq!(registry.active_count(), 1, "promote 后应注册为后台任务");
+    assert_eq!(registry.active_count(), 1, "转入后台后应注册为后台任务");
     assert_eq!(
         peri_acp_types::tasks::TaskManager::shutdown(registry.as_ref()).await,
         peri_acp_types::tasks::TaskShutdownReport::Complete
@@ -289,37 +307,41 @@ async fn test_foreground_timeout_zero_promotes_at_foreground_maximum() {
 #[test]
 fn test_foreground_timeout_note_explains_bounded_sync_requests() {
     assert!(
-        foreground_timeout_note(None).is_empty(),
+        foreground_timeout_note(None, 600_000).is_empty(),
         "未改写时不应附加说明"
     );
-    let zero = foreground_timeout_note(Some(0));
+    let zero = foreground_timeout_note(Some(0), 600_000);
     assert!(zero.contains("cannot disable the timeout"), "{zero}");
+    assert!(zero.contains("600000"), "{zero}");
+    let oversized = foreground_timeout_note(Some(3_000_000), 900_000);
+    assert!(oversized.contains("3000000"), "{oversized}");
     assert!(
-        zero.contains(&FOREGROUND_MAX_TIMEOUT_MS.to_string()),
-        "{zero}"
+        oversized.contains("900000"),
+        "说明应使用实际生效上限: {oversized}"
     );
-    let oversized = foreground_timeout_note(Some(600_000));
-    assert!(oversized.contains("600000"), "{oversized}");
     assert!(oversized.contains("run_in_background"), "{oversized}");
 }
 
-/// 工具描述与实现一致：默认/上限取自常量，且不得再宣传"0 = 不超时"。
+/// 工具描述与实现一致：数值取自当前会话生效的规则，不再出现旧的 15s / 2 分钟上限 /
+/// 600000 后台上限描述，也不得宣传"0 = 不超时"。
 #[test]
 fn test_bash_timeout_description_matches_implementation() {
-    let tool = BashTool::new(std::env::temp_dir().to_str().unwrap());
+    let tool = BashTool::new(std::env::temp_dir().to_str().unwrap())
+        .with_timeout_policy(fixed_policy(&[]));
     let timeout_schema = &tool.parameters()["properties"]["timeout"];
     assert_eq!(timeout_schema["type"].as_str(), Some("integer"));
     assert_eq!(timeout_schema["minimum"].as_u64(), Some(0));
-    assert_eq!(timeout_schema["maximum"].as_u64(), Some(600_000));
+    assert!(
+        timeout_schema.get("maximum").is_none(),
+        "schema 不得再写死 maximum：生效上限随环境变量变化，超限请求由回执说明"
+    );
     let schema = timeout_schema["description"]
         .as_str()
         .expect("timeout 参数描述")
         .to_string();
-    for text in [tool.description().to_string(), schema] {
+    for text in [tool.description().to_string(), schema.clone()] {
         assert!(
-            text.contains(
-                &peri_agent::agent::async_tasks::FOREGROUND_DEFAULT_TIMEOUT_MS.to_string()
-            ),
+            text.contains(&FOREGROUND_DEFAULT_TIMEOUT_MS.to_string()),
             "描述应写明前台默认超时: {text}"
         );
         assert!(
@@ -330,11 +352,39 @@ fn test_bash_timeout_description_matches_implementation() {
             !text.contains("0 = no timeout") && !text.contains("disable the timeout entirely"),
             "同步路径不得宣传 0 可禁用超时: {text}"
         );
-        assert!(
-            !text.contains("timeout: 300000"),
-            "不得再建议超过前台上限的值: {text}"
-        );
+        for stale in [
+            "15000ms",
+            "15s",
+            "capped at 120000ms",
+            "up to 600000ms) requests termination",
+        ] {
+            assert!(
+                !text.contains(stale),
+                "不得保留旧规则描述 {stale:?}: {text}"
+            );
+        }
     }
+    assert!(
+        schema.contains("no time limit") && schema.contains("ignore `timeout`"),
+        "有人值守会话应说明后台不限时且忽略 timeout: {schema}"
+    );
+}
+
+/// 无人值守会话的 schema 描述写明后台时限、默认与上限；环境变量改变的数值同步变化。
+#[test]
+fn test_bash_timeout_description_reflects_unattended_session_limits() {
+    let unattended = BashTool::new(std::env::temp_dir().to_str().unwrap()).with_timeout_policy(
+        ShellTimeoutPolicy::from_lookup(SessionAttendance::Unattended, |name| {
+            (name == MAX_TIMEOUT_ENV).then(|| "9000000".to_string())
+        }),
+    );
+    let schema = unattended.parameters()["properties"]["timeout"]["description"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(schema.contains("1800000"), "{schema}");
+    assert!(schema.contains("9000000"), "{schema}");
+    assert!(!schema.contains("no time limit"), "{schema}");
 }
 
 #[test]
@@ -345,10 +395,12 @@ fn test_tool_name_is_Bash() {
 }
 
 #[tokio::test]
-async fn test_bash_default_timeout_is_15_seconds() {
+async fn test_bash_default_timeout_is_two_minutes() {
     let _process_env = peri_mcp_common::process_env::lock().expect("process env lock");
-    let tool = BashTool::new(std::env::temp_dir().to_str().unwrap());
-    // 不传 timeout → 默认 15000ms = 15s
+    let tool = BashTool::new(std::env::temp_dir().to_str().unwrap())
+        .with_timeout_policy(fixed_policy(&[]));
+    // 不传 timeout → 默认 120000ms = 2 分钟
+    assert_eq!(tool.timeout_policy.foreground_default_ms(), 120_000);
     let result = tool
         .invoke(
             serde_json::json!({"command": "echo ok"}),

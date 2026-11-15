@@ -110,7 +110,7 @@ async fn test_bash_typed_evidence_marks_promoted_timeout_still_running() {
         BashTool::new(std::env::temp_dir().to_str().unwrap()).with_task_manager(manager.clone());
     let output = tool
         .invoke_output(
-            serde_json::json!({"command": "sleep 1", "timeout": 100}),
+            serde_json::json!({"command": "sh -c 'sleep 1'", "timeout": 100}),
             peri_agent::tools::ToolContext::new(&[], "."),
         )
         .await
@@ -120,7 +120,11 @@ async fn test_bash_typed_evidence_marks_promoted_timeout_still_running() {
         Some(true),
         "structured timeout preserves the recovery failure"
     );
-    assert!(output.text.contains("Command timed out") && output.text.contains("Do not rerun"));
+    assert!(
+        output.text.contains(
+            "Command did not complete within its 0.1s timeout and was moved to the background"
+        ) && output.text.contains("Do not rerun")
+    );
     let evidence = output.execution.expect("promoted timeout evidence");
     assert_eq!(evidence.status, ToolExecutionStatus::RunningAfterTimeout);
     assert!(evidence.task_id.is_some());
@@ -280,7 +284,7 @@ async fn test_production_dispatch_persists_promoted_timeout_lifecycle() {
     );
     let outcome = dispatch_bash(
         &context,
-        serde_json::json!({"command": "sleep 1", "timeout": 100}),
+        serde_json::json!({"command": "sh -c 'sleep 1'", "timeout": 100}),
         CancellationToken::new(),
     )
     .await

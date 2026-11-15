@@ -30,7 +30,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use base64::Engine as _;
 use peri_acp_types::mcp::{McpNotificationMessageKind, MCP_MESSAGE_KIND_META_KEY};
-use peri_agent::agent::async_tasks::parse_background_timeout;
+use peri_acp_types::session_attendance::SessionAttendance;
 use peri_agent::tools::{BaseTool, ToolContext, ToolExecutionStatus};
 use rmcp::{
     model::{
@@ -59,6 +59,7 @@ use crate::resources::{
 };
 use crate::shell_tasks::{ShellTaskListTool, ShellTasks, SHELL_TASK_LIST_TOOL};
 use crate::terminal::BashTool;
+use crate::terminal_timeout::background_timeout_note;
 use crate::WorkspaceInstanceInput;
 use peri_mcp_common::task_owner::{task_owner_from_meta, thread_owner_from_meta};
 
@@ -156,6 +157,16 @@ impl WorkspaceMcpServer {
     /// session assembly (beta flag projection; `false` = existing behavior). It reaches both the
     /// tool schema and [`Self::call_owned_bash`]'s background decision from the same field.
     pub fn standalone(cwd: impl Into<String>, default_run_in_background: bool) -> Self {
+        Self::standalone_for(cwd, default_run_in_background, SessionAttendance::default())
+    }
+
+    /// [`Self::standalone`] plus the session attendance injected at assembly: it decides whether
+    /// background Bash tasks have a time limit (unattended sessions) or none (attended sessions).
+    pub fn standalone_for(
+        cwd: impl Into<String>,
+        default_run_in_background: bool,
+        attendance: SessionAttendance,
+    ) -> Self {
         let mut server = Self::new(cwd, None);
         let tasks = ShellTasks::new();
         let cwd = server.cwd.clone();
@@ -163,7 +174,8 @@ impl WorkspaceMcpServer {
             BashTool::new(&cwd)
                 .with_task_manager(tasks.manager())
                 .with_on_bg_complete(tasks.completion_callback())
-                .with_default_run_in_background(default_run_in_background),
+                .with_default_run_in_background(default_run_in_background)
+                .with_session_attendance(attendance),
         );
         server.tools[6] = bash.clone();
         server.bash = bash;
@@ -223,13 +235,16 @@ impl WorkspaceMcpServer {
                 .and_then(serde_json::Value::as_str)
                 .ok_or_else(|| McpError::invalid_params("missing Bash command", None))?;
             let timeout_input = serde_json::Value::Object(arguments.cloned().unwrap_or_default());
-            let timeout = parse_background_timeout(&timeout_input)
+            let timeout = self
+                .bash
+                .timeout_policy
+                .parse_background(&timeout_input)
                 .map_err(|error| McpError::invalid_params(error.to_string(), None))?;
             let task = tasks
                 .spawn_owned_scoped(
                     command.into(),
                     self.cwd.clone(),
-                    timeout,
+                    timeout.limit_ms,
                     owner,
                     thread_owner,
                 )
@@ -247,7 +262,11 @@ impl WorkspaceMcpServer {
             return Ok(CallToolResponse::Complete(
                 peri_mcp_common::result_mapping::with_execution(
                     rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(
-                        format!("Background shell task started.\ntask_id: {}", task.task_id),
+                        format!(
+                            "Background shell task started.\ntask_id: {}{}",
+                            task.task_id,
+                            background_timeout_note(&timeout, &self.bash.timeout_policy)
+                        ),
                     )]),
                     Some(&evidence),
                 ),
@@ -265,6 +284,7 @@ impl WorkspaceMcpServer {
         // 前景路径的工具实例**不带**缺省后台位：后台/前台判定已在上方完成，这里只提供
         // 前台执行能力与超时 promote（`false` 保持 `BashTool::new` 的缺省）。
         let bash = BashTool::new(&self.cwd)
+            .with_timeout_policy(self.bash.timeout_policy)
             .with_task_manager(tasks.manager())
             .with_on_bg_complete(callback)
             .with_on_bg_started(Arc::new(move |task_id| {

@@ -14,6 +14,7 @@ mod registry;
 mod scope;
 mod shell;
 mod shell_executor;
+mod shell_timeout;
 
 #[cfg(test)]
 use crate::agent::events::BackgroundTaskResult;
@@ -27,12 +28,14 @@ pub use registry::{
     BackgroundRegistryError, BackgroundTask, BackgroundTaskRegistry, BackgroundTaskStatus,
     BgCancelHandle, BgTaskInfo,
 };
-pub use shell::{
-    bg_shell_task_id, finalize_bg_shell, parse_background_timeout, parse_foreground_timeout,
-    parse_timeout_ms, truncate_bytes, TimeoutParseError, BACKGROUND_MAX_TIMEOUT_MS,
-    FOREGROUND_DEFAULT_TIMEOUT_MS, FOREGROUND_MAX_TIMEOUT_MS,
-};
+pub use shell::{bg_shell_task_id, finalize_bg_shell, truncate_bytes};
 pub use shell_executor::ShellExecutor;
+pub use shell_timeout::{
+    is_sleep_command, parse_timeout_ms, BackgroundTimeout, ShellTimeoutPolicy, TimeoutParseError,
+    BACKGROUND_DEFAULT_TIMEOUT_MS, BACKGROUND_MAX_TIMEOUT_MS,
+    BACKGROUND_TEXT_PROMPT_DEFAULT_TIMEOUT_MS, DEFAULT_TIMEOUT_ENV, FOREGROUND_DEFAULT_TIMEOUT_MS,
+    FOREGROUND_MAX_TIMEOUT_MS, MAX_TIMEOUT_ENV,
+};
 
 /// 后台任务类别（事实源 peri-acp-types::tasks）
 pub use peri_acp_types::tasks::{BgShellHandle, BgTaskKind, BgTaskRegistration};
@@ -52,6 +55,10 @@ mod registry_wake_tests;
 #[cfg(test)]
 #[path = "async_tasks/bg_thread_identity_test.rs"]
 mod bg_thread_identity_tests;
+
+#[cfg(test)]
+#[path = "async_tasks/shell_timeout_test.rs"]
+mod shell_timeout_tests;
 
 #[cfg(test)]
 mod shutdown_test;

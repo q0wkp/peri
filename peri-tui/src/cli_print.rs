@@ -11,10 +11,13 @@ use std::sync::Arc;
 use crate::cli_args::OutputFormat;
 use agent_client_protocol::schema::v1::StopReason;
 use anyhow::Result;
-use peri_acp::host::assemble::{HostAssemblyInput, assemble_server_config};
+use peri_acp::host::assemble::{
+    HostAssemblyInput, HostCapabilities, assemble_server_config_with_capabilities,
+};
 use peri_acp::transport::mpsc::mpsc_transport_pair;
 use peri_acp_types::interaction::UnansweredCause;
 use peri_acp_types::messages::MessageContent;
+use peri_acp_types::session_attendance::SessionAttendance;
 use peri_acp_types::session_store::SessionStoreDeployment;
 use peri_tui::acp_client::{
     AcpDeployment, AcpNotification, AcpTuiClient,
@@ -46,6 +49,17 @@ fn load_print_config_source(
         None => peri_tui::config::ConfigSource::load_lenient(),
     };
     Ok(Arc::new(source))
+}
+
+/// print 的部署能力：默认能力 + 会话值守形态。
+///
+/// `peri -p` 的 prompt 以文本一次性传入、无人在场，Bash 后台任务因此有时限
+/// （默认 10 分钟），到时被停止并通知模型。
+fn print_host_capabilities() -> HostCapabilities {
+    HostCapabilities {
+        attendance: SessionAttendance::UnattendedTextPrompt,
+        ..HostCapabilities::default()
+    }
 }
 
 /// -p 模式执行入口
@@ -176,36 +190,39 @@ pub async fn run_print(
     let (session_resources, session_store_shutdown) = resources.into_parts();
 
     // ── ACP host 装配（与 TUI 同源，见 peri_acp::host::assemble）──
-    let mut host_config = assemble_server_config(HostAssemblyInput {
-        provider: provider.clone(),
-        peri_config: Arc::new(parking_lot::RwLock::new(peri_config)),
-        config_source: config_source.clone(),
-        permission_mode: shared_permission,
-        session_resources: session_resources.clone(),
-        workspace_id: None,
-        session_store_shutdown: Some(Box::new(session_store_shutdown)),
-        cwd: cwd.clone(),
-        bare,
-        // print 无 tick 语义（迁移前 print 路径无每秒 tick，行为零变化）。
-        drive_cron_tick: false,
-        // 顶层装配不构造 builtin 上下文：session 级 workspace 输入由每 session 的
-        // 会话环境装配产生（AW3-11）。
-        workspace_input: None,
-        // 顶层三路径（无会话上下文）不消费 flag：Bash 缺省恒为前台。
-        workspace_bash_default_run_in_background: false,
-        // 资源面输入同为会话级（见上）：顶层装配无会话消费者，保持未接线。
-        workspace_resources: None,
-        // 同理：workflow 运行时槽位是会话级装配输入（编排状态随会话存在），顶层恒为 `None`。
-        workflow_input: None,
-        // 顶层装配无会话上下文：A24 关闭集恒为空集（会话装配才从 frozen 派生）。
-        builtin_closed: Default::default(),
-        // 宿主技能面关闭位与关闭集同源（会话级派生）：顶层装配恒为假。
-        skills_face_closed: false,
-        plugin_face_closed: false,
-        // print 装配点无准备路径提供的插件聚合：按既有语义由装配面自行加载。
-        prepared_plugins: None,
-        session_mcp_servers: None,
-    })
+    let mut host_config = assemble_server_config_with_capabilities(
+        HostAssemblyInput {
+            provider: provider.clone(),
+            peri_config: Arc::new(parking_lot::RwLock::new(peri_config)),
+            config_source: config_source.clone(),
+            permission_mode: shared_permission,
+            session_resources: session_resources.clone(),
+            workspace_id: None,
+            session_store_shutdown: Some(Box::new(session_store_shutdown)),
+            cwd: cwd.clone(),
+            bare,
+            // print 无 tick 语义（迁移前 print 路径无每秒 tick，行为零变化）。
+            drive_cron_tick: false,
+            // 顶层装配不构造 builtin 上下文：session 级 workspace 输入由每 session 的
+            // 会话环境装配产生（AW3-11）。
+            workspace_input: None,
+            // 顶层三路径（无会话上下文）不消费 flag：Bash 缺省恒为前台。
+            workspace_bash_default_run_in_background: false,
+            // 资源面输入同为会话级（见上）：顶层装配无会话消费者，保持未接线。
+            workspace_resources: None,
+            // 同理：workflow 运行时槽位是会话级装配输入（编排状态随会话存在），顶层恒为 `None`。
+            workflow_input: None,
+            // 顶层装配无会话上下文：A24 关闭集恒为空集（会话装配才从 frozen 派生）。
+            builtin_closed: Default::default(),
+            // 宿主技能面关闭位与关闭集同源（会话级派生）：顶层装配恒为假。
+            skills_face_closed: false,
+            plugin_face_closed: false,
+            // print 装配点无准备路径提供的插件聚合：按既有语义由装配面自行加载。
+            prepared_plugins: None,
+            session_mcp_servers: None,
+        },
+        print_host_capabilities(),
+    )
     .await;
     host_config.model_transport_route = model_transport_route;
     let (client_transport, server_transport) = mpsc_transport_pair();
@@ -753,6 +770,24 @@ mod tests {
             panic!("print permission 应自动选择 allow_once")
         };
         assert_eq!(selected.option_id.0.as_ref(), "allow_once");
+    }
+
+    /// [回归测试] print 必须向装配面声明无人值守的文本 prompt 会话：Bash 后台时限据此生效，
+    /// 其余部署能力保持默认。
+    #[test]
+    fn test_print_declares_unattended_text_prompt_session() {
+        let capabilities = print_host_capabilities();
+        assert_eq!(
+            capabilities.attendance,
+            SessionAttendance::UnattendedTextPrompt
+        );
+        assert_eq!(
+            HostCapabilities {
+                attendance: SessionAttendance::default(),
+                ..capabilities
+            },
+            HostCapabilities::default()
+        );
     }
 
     /// [回归测试] `-p` 取消 elicitation 时必须声明「无人可作答」，否则 broker

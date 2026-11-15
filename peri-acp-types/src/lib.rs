@@ -86,6 +86,7 @@ pub mod recovery;
 pub mod runtime;
 pub mod sentinel;
 pub mod session;
+pub mod session_attendance;
 pub mod session_authorization;
 pub mod session_resources;
 pub mod session_store;

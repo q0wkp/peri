@@ -187,6 +187,13 @@ fn async_result_notification_maps_terminal_state_and_evidence() {
     assert!(!timed_out.contains("state: succeeded"));
     assert!(timed_out.contains("exit_code: unknown"));
     assert!(timed_out.contains("stderr: unknown"));
+    assert!(
+        timed_out.contains(
+            "Background command \"sleep 60\" was stopped after reaching its background time limit"
+        ),
+        "停止通知必须点明命令与时限原因，供模型决定是否带更长 timeout 重跑: {timed_out}"
+    );
+    assert!(timed_out.contains("`timeout`"), "{timed_out}");
 
     // shell 结果缺失（无文件证据）也不得猜退出码。
     let no_evidence = BackgroundTaskResult {

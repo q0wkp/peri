@@ -18,7 +18,9 @@ async fn test_bg_explicit_timeout_kills_process_group() {
     let marker_path = marker.to_string_lossy().to_string();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<BackgroundTaskResult>();
     let _process_env = peri_mcp_common::process_env::lock().expect("process env lock");
+    // 后台时限只在无人值守会话生效；有人值守会话忽略 timeout（见下方对照用例）。
     let tool = BashTool::new(std::env::temp_dir().to_str().unwrap())
+        .with_session_attendance(SessionAttendance::Unattended)
         .with_task_manager(registry)
         .with_on_bg_complete(Arc::new(move |r, _kind| {
             tx.send(r.clone()).map_err(|error| error.to_string())
@@ -246,12 +248,13 @@ async fn test_sync_timeout_promotes_to_background() {
         .await
         .unwrap_err()
         .to_string();
-    assert!(err.contains("timed out"), "Err 应含 timed out: {err}");
-    assert!(err.contains("shell-"), "Err 应含 task_id: {err}");
     assert!(
-        err.contains("background task"),
-        "Err 应说明已转后台续跑: {err}"
+        err.contains(
+            "Command did not complete within its 0.2s timeout and was moved to the background"
+        ),
+        "Err 应写明实际生效秒数并说明已转后台续跑: {err}"
     );
+    assert!(err.contains("shell-"), "Err 应含 task_id: {err}");
     assert!(
         err.contains("result will be delivered to this session"),
         "超时转后台回执必须与最终投递路径一致: {err}"
@@ -450,7 +453,7 @@ async fn test_sync_timeout_with_rejected_promotion_falls_back_to_killing_the_gro
     let out = BashTool::new(cwd.to_str().unwrap())
         .with_task_manager(Arc::clone(&manager))
         .invoke_output(
-            serde_json::json!({"command": "sleep 5", "timeout": 300}),
+            serde_json::json!({"command": "sh -c 'sleep 5'", "timeout": 300}),
             peri_agent::tools::ToolContext::new(&[], "."),
         )
         .await
