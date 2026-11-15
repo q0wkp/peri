@@ -7,6 +7,7 @@ use crate::kit::acp_events::history_page::{
 use crate::kit::acp_types::ToolResultRefetch;
 use crate::kit::history_paging::HistoryPageOrigin;
 use crate::kit::history_window::PersistentEntryKey;
+use crate::kit::test_support::NotificationGuard;
 
 fn source(tool_id: &str, token: &str, cursor: &str) -> history_page::ToolResultSource {
     history_page::ToolResultSource {
@@ -749,7 +750,7 @@ fn test_expanded_tool_card_claims_deferred_result_refetch() {
     use crate::kit::tui_render_unit::{FoldState, TuiToolCard};
 
     crate::kit::atoms::init_atoms();
-    crate::kit::atoms::NOTIFICATION.set(None);
+    let _notification = NotificationGuard::install();
     history_page::clear_pending_tool_ends_for_tests();
     crate::kit::acp_events::history_window::insert_deferred_tool_result_for_tests(
         "t-big",

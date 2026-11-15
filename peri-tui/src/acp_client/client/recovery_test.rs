@@ -1,5 +1,6 @@
 use super::*;
 use crate::kit::atoms::{self, CONFIRM_PAYLOAD};
+use crate::kit::test_support::NotificationGuard;
 use peri_acp::transport::{
     AcpTransport,
     mpsc::{MpscServerTransport, mpsc_transport_pair},
@@ -58,22 +59,6 @@ impl UiAtomsGuard {
         save_atom!(atoms::FOLD_OVERRIDES);
         save_atom!(crate::kit::steer_state::STEERS);
         Self(restores)
-    }
-}
-
-/// 取走并清空全局通知，结束（含 panic）时原样放回：`is_none()` 断言不能依赖
-/// 其他测试恰好没留下通知。
-struct NotificationGuard(Option<atoms::Notification>);
-
-impl NotificationGuard {
-    fn capture() -> Self {
-        Self(atoms::NOTIFICATION.state().write().take())
-    }
-}
-
-impl Drop for NotificationGuard {
-    fn drop(&mut self) {
-        atoms::NOTIFICATION.set(self.0.take());
     }
 }
 
@@ -483,7 +468,7 @@ async fn incomplete_close_keeps_pending_load_target() {
 #[serial_test::serial]
 async fn failed_recovery_meta_keeps_session_and_sets_notification() {
     let _guard = UiAtomsGuard::capture();
-    let _notification = NotificationGuard::capture();
+    let _notification = NotificationGuard::install();
     let (client, server) = interactive_client();
     let (load, _) = tokio::time::timeout(Duration::from_secs(5), async {
         tokio::join!(
@@ -540,7 +525,7 @@ async fn failed_recovery_meta_keeps_session_and_sets_notification() {
 #[serial_test::serial]
 async fn partial_recovery_meta_sets_notification() {
     let _guard = UiAtomsGuard::capture();
-    let _notification = NotificationGuard::capture();
+    let _notification = NotificationGuard::install();
     let (client, server) = interactive_client();
     let (load, _) = tokio::time::timeout(Duration::from_secs(5), async {
         tokio::join!(
@@ -581,7 +566,7 @@ async fn partial_recovery_meta_sets_notification() {
 #[serial_test::serial]
 async fn malformed_recovery_meta_is_ignored() {
     let _guard = UiAtomsGuard::capture();
-    let _notification = NotificationGuard::capture();
+    let _notification = NotificationGuard::install();
     let (client, server) = interactive_client();
     let (load, _) = tokio::time::timeout(Duration::from_secs(5), async {
         tokio::join!(

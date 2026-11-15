@@ -2,6 +2,7 @@ use super::*;
 use crate::kit::acp_types::{AcpEventData, BgTaskSnapshotSource};
 use crate::kit::atoms::{BG_DISPLAY, BG_LIVE_DETAIL, BG_TASK_REVISION, BgLiveStatus};
 use crate::kit::stream_data::{TuiTextChunk, TuiToolEnded, TuiToolStarted};
+use crate::kit::test_support::NotificationGuard;
 use crate::kit::tui_render_unit::TuiRenderUnit;
 use serial_test::serial;
 
@@ -608,6 +609,7 @@ fn terminal_snapshot_does_not_resurrect_a_running_task() {
 #[test]
 #[serial]
 fn test_mcp_shell_task_events_update_bottom_task_area() {
+    let _notification = NotificationGuard::install();
     crate::kit::atoms::init_atoms();
     BG_DISPLAY.state().write().clear();
     let mut state = make_state();

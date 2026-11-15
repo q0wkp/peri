@@ -4,6 +4,8 @@ use super::{
     THEME_LIST, ThemeCatalogTabs, ThemePanel, build_preview, classify_theme_catalog,
     list_header_rows, refresh_theme_catalog_after_download, resolve_selection,
 };
+use crate::kit::atoms::{NOTIFICATION, PERI_CONFIG_HANDLE, TUI_CONFIG_HANDLE};
+use crate::kit::test_support::NotificationGuard;
 use peri_theme::atoms::{PALETTE_ATOM, PERI_COLORS_ATOM, THEME_ATOM};
 use peri_theme::theme::ThemeMode;
 use ratatui_kit::crossterm::event::{
@@ -111,6 +113,22 @@ impl Drop for ThemeAtomsGuard {
         PALETTE_ATOM.state().set(self.palette);
         PERI_COLORS_ATOM.state().set(self.peri.clone());
         *THEME_LIST.state().write() = std::mem::take(&mut self.catalog);
+    }
+}
+
+/// 点击落盘在游离线程里执行，两个配置句柄都已安装时它必以一条通知收尾（成功或失败）。
+/// 等该通知出现再放行，避免它晚于 `NotificationGuard` 恢复、落进后续用例。
+fn wait_for_persist_thread_notification() {
+    if TUI_CONFIG_HANDLE.get().is_none() || PERI_CONFIG_HANDLE.get().is_none() {
+        return;
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while NOTIFICATION.state().read().is_none() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "主题落盘线程必须以通知收尾"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
     }
 }
 
@@ -248,6 +266,7 @@ fn item_row_from_footer(buf: &Buffer, items_below: u16) -> u16 {
 #[test]
 #[serial]
 fn click_on_rendered_item_row_selects_that_item() {
+    let _notification = NotificationGuard::install();
     let _atoms = ThemeAtomsGuard::install(&["peri-dark", "dark", "light"], "peri-dark");
 
     // 第一遍：只渲染，行号全部取自缓冲（不复用生产公式）
@@ -276,6 +295,7 @@ fn click_on_rendered_item_row_selects_that_item() {
     });
 
     let (result, selected) = rx.try_recv().expect("点击必须走真实事件入口");
+    wait_for_persist_thread_notification();
     assert_eq!(result, EventResult::Consumed);
     assert_eq!(
         selected, "dark",

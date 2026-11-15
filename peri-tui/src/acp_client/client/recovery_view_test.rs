@@ -1,6 +1,7 @@
 //! `_meta.peri.recovery` 解码与通知投影的纯客户端行为。
 
 use super::*;
+use crate::kit::test_support::NotificationGuard;
 use peri_acp_types::recovery::RecoveryViewStatus;
 
 fn failure_view(blocked: bool) -> RecoveryView {
@@ -38,26 +39,10 @@ fn decode_ignores_malformed_or_missing_meta() {
     assert!(decode(&serde_json::json!({"_meta": {"peri.recovery": {"status": "nope"}}})).is_none());
 }
 
-/// 取走并清空全局通知，结束（含 panic）时原样放回：`is_none()` 断言不能依赖
-/// 其他测试恰好没留下通知。
-struct NotificationGuard(Option<Notification>);
-
-impl NotificationGuard {
-    fn capture() -> Self {
-        Self(NOTIFICATION.state().write().take())
-    }
-}
-
-impl Drop for NotificationGuard {
-    fn drop(&mut self) {
-        NOTIFICATION.set(self.0.take());
-    }
-}
-
 #[test]
 #[serial_test::serial]
 fn failed_blocked_view_sets_notification_with_reason() {
-    let _notification = NotificationGuard::capture();
+    let _notification = NotificationGuard::install();
     present("session-a", &failure_view(true));
     let state = NOTIFICATION.state();
     let notice = state.read();
@@ -94,7 +79,7 @@ fn partial_view(count: usize) -> RecoveryView {
 #[test]
 #[serial_test::serial]
 fn partial_notice_asks_for_explicit_resume_and_counts_child_threads() {
-    let _notification = NotificationGuard::capture();
+    let _notification = NotificationGuard::install();
     crate::i18n::init(Some("en"));
     present("session-a", &partial_view(121));
     let state = NOTIFICATION.state();
@@ -121,7 +106,7 @@ fn partial_notice_asks_for_explicit_resume_and_counts_child_threads() {
 #[test]
 #[serial_test::serial]
 fn ok_view_produces_no_notification() {
-    let _notification = NotificationGuard::capture();
+    let _notification = NotificationGuard::install();
     let view = RecoveryView {
         status: RecoveryViewStatus::Ok,
         ..failure_view(false)

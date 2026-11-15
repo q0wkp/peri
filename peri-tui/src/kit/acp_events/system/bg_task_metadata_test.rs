@@ -1,5 +1,6 @@
 use super::*;
 use crate::kit::atoms::{BgDisplayEntry, BgLiveDetail, BgTaskIdentity};
+use crate::kit::test_support::NotificationGuard;
 use std::collections::HashMap;
 
 struct Restore {
@@ -78,6 +79,7 @@ fn assert_recent_bounds(protected: usize) {
 #[test]
 #[serial_test::serial]
 fn terminal_event_burst_bounds_display_identity_and_vector_capacity() {
+    let _notification = NotificationGuard::install();
     let _restore = Restore::empty();
     let mut state = crate::kit::acp_events::acp_events_test::make_fold_test_state();
     let summary = "display description".repeat(2048);

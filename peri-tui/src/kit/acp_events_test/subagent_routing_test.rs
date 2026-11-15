@@ -1,4 +1,5 @@
 use super::*;
+use crate::kit::test_support::NotificationGuard;
 
 fn make_state(phase: SessionPhase, variant: u8) -> BridgeState {
     BridgeState {
@@ -1136,6 +1137,7 @@ fn test_reordered_task_rows_bind_by_child_thread_identity() {
 #[test]
 #[serial]
 fn test_resumed_background_occurrence_uses_current_pending_owner() {
+    let _notification = NotificationGuard::install();
     use crate::kit::atoms::{BG_DISPLAY, BG_LIVE_DETAIL, BG_TASK_IDENTITY, BG_TASKS};
     use crate::kit::stream_data::TuiTextChunk;
 

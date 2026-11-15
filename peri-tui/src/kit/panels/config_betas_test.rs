@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::kit::atoms::{NOTIFICATION, PERI_CONFIG_HANDLE};
+use crate::kit::test_support::NotificationGuard;
 use peri_acp_types::beta_flags::{BETA_FLAGS, BetaFlag, FULL_ASYNC_TOOLS};
 
 /// 确保配置句柄存在（OnceLock：其他用例可能已建立，此处只保证非空）。
@@ -89,6 +90,7 @@ fn test_read_beta_toggle_reads_effective_layer_override() {
 #[test]
 #[serial_test::serial]
 fn test_toggle_beta_flag_persists_candidate_snapshot() {
+    let _notification = NotificationGuard::install();
     let handle = ensure_config_handle();
     handle
         .write()
@@ -126,6 +128,7 @@ fn test_toggle_beta_flag_persists_candidate_snapshot() {
 #[test]
 #[serial_test::serial]
 fn test_toggle_beta_flag_save_failure_rolls_back_memory_view() {
+    let _notification = NotificationGuard::install();
     let handle = ensure_config_handle();
     handle.write().config.betas.set(FULL_ASYNC_TOOLS, false);
 

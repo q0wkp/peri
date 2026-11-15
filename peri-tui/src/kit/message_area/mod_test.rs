@@ -349,10 +349,10 @@ async fn image_preview_hover_requires_stable_dwell_and_cancels_on_exit() {
 /// 不 spawn。成功分支会真实打开 Finder，不在测试中执行（§4.6 macOS 手工验证）。
 #[test]
 #[cfg(target_os = "macos")]
+#[serial]
 fn test_try_open_image_validation_failure_notifies() {
     crate::i18n::init(Some("en"));
-    // 清空遗留通知（测试间原子污染防御）
-    *crate::kit::atoms::NOTIFICATION.state().write() = None;
+    let _notification = crate::kit::test_support::NotificationGuard::install();
     let ok = try_open_image("/nonexistent/path/x.png");
     assert!(!ok, "校验失败不 spawn");
     // [TRAP] Notification 非 Clone——guard 内提取 message 字段后 drop。

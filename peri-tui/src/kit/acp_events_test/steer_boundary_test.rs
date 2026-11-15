@@ -14,6 +14,7 @@ use crate::acp_client::{AcpNotification, AcpTuiClient};
 use crate::kit::atoms::{self, ACTIVE_SESSION_ID, BRIDGE_RESET_COUNTER, VIEW_MODELS};
 use crate::kit::steer_queue::SteerItemState;
 use crate::kit::steer_state::{STEERS, SteerCommand, SteerCommandKind, SteerState};
+use crate::kit::test_support::NotificationGuard;
 use crate::kit::tui_render_unit::TuiRenderUnit;
 
 fn snapshot() -> UserInputQueueSnapshot {
@@ -32,6 +33,8 @@ struct RestoreAtoms {
     active: String,
     counter: u64,
     view: atoms::ViewModelsSnapshot,
+    // 末尾的 notifier 兜底会写通知；各用例在 guard 释放前已 `notifier.await`。
+    _notification: NotificationGuard,
 }
 
 impl RestoreAtoms {
@@ -42,6 +45,7 @@ impl RestoreAtoms {
             active: ACTIVE_SESSION_ID.state().read().clone(),
             counter: BRIDGE_RESET_COUNTER.get(),
             view: VIEW_MODELS.state().read().clone(),
+            _notification: NotificationGuard::install(),
         };
         STEERS.set(SteerState::default());
         *ACTIVE_SESSION_ID.state().write() = "s".into();

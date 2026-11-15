@@ -208,6 +208,7 @@ fn auth_detail_and_logout_confirmation_hide_account_reference() {
 #[test]
 #[serial]
 fn account_error_moves_focus_to_auth_actions() {
+    let _notification = NotificationGuard::install();
     let (_cfg, mut state) = plan_state_with_sentinels();
     state.plan.account = "invalid/account".to_string();
     let mut frame = 0usize;
@@ -255,6 +256,7 @@ fn account_error_moves_focus_to_auth_actions() {
 #[test]
 #[serial]
 fn store_error_opens_the_recovery_row_and_focuses_it() {
+    let _notification = NotificationGuard::install();
     let (_cfg, mut state) = plan_state_with_sentinels();
     state.plan.store = "relative/store".to_string();
     assert!(!state.plan_store_editable, "进入时合法 store 默认只读");
