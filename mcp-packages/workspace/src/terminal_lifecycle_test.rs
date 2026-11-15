@@ -162,7 +162,7 @@ async fn assert_nohup_pipe_timeout_promotes(redirect: &str) {
     assert_eq!(evidence.status, ToolExecutionStatus::RunningAfterTimeout);
     assert_eq!(evidence.exit_code, None);
     assert_eq!(active_before_release, 1);
-    assert!(output.text.contains("background task"));
+    assert!(output.text.contains("moved to the background"));
     assert!(output.text.contains("the shell has exited"));
     let completed = completed
         .unwrap()

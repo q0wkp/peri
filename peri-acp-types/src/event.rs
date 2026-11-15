@@ -328,8 +328,17 @@ impl BackgroundTaskResult {
                     .to_string(),
             ),
             "cancelled" => parts.push("任务已取消，未按正常完成交付。".to_string()),
-            "timed_out" if self.shell_output.is_some() => parts
-                .push("超时被终止；进程组已终止，逃逸子进程可能存活。".to_string()),
+            "timed_out" if self.shell_output.is_some() => {
+                // 首句沿用 Claude Code 的停止通知措辞；模型据此知道可带更长 timeout 重跑。
+                parts.push(format!(
+                    "Background command \"{}\" was stopped after reaching its background time limit",
+                    bounded_notification_field(&self.prompt_summary, NOTIFICATION_SUMMARY_LIMIT)
+                ));
+                parts.push(
+                    "进程组已终止，逃逸子进程可能存活；如需更长时间，请带更大的 `timeout` 重新运行。"
+                        .to_string(),
+                );
+            }
             "timed_out" => parts.push("任务超时终止。".to_string()),
             "failed" => {
                 if self.shell_output.is_some() {

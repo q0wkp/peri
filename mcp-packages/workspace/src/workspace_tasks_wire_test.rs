@@ -451,7 +451,7 @@ async fn foreground_timeout_promotion_returns_queryable_task() {
     let capabilities = ClientCapabilities::builder().enable_tasks().build();
     let (client, server_task) = connect(server.clone(), capabilities).await;
     let request = CallToolRequestParams::new("Bash").with_arguments(
-        serde_json::json!({"command": "sleep 0.3; printf promoted", "timeout": 50})
+        serde_json::json!({"command": "printf start; sleep 0.3; printf promoted", "timeout": 50})
             .as_object()
             .expect("object")
             .clone(),
@@ -642,11 +642,16 @@ async fn concurrent_limit_rejection_keeps_limit_facts_on_the_wire() {
 
 /// [回归测试] owned 后台路径曾把整数值浮点 timeout 当作未设置（无限运行）。
 /// `timeout: 100.0` 必须在 wire 上按 100ms 生效，命令来不及写出 sentinel。
+/// 后台时限只属于无人值守会话，因此用无人值守装配。
 #[tokio::test]
 async fn background_integral_float_timeout_is_normalized_on_the_wire() {
     let dir = tempfile::tempdir().expect("workspace");
     let finished = dir.path().join("finished");
-    let server = WorkspaceMcpServer::standalone(dir.path().to_string_lossy(), false);
+    let server = WorkspaceMcpServer::standalone_for(
+        dir.path().to_string_lossy(),
+        false,
+        peri_acp_types::session_attendance::SessionAttendance::Unattended,
+    );
     let (client, server_task) = connect(
         server.clone(),
         ClientCapabilities::builder().enable_tasks().build(),
@@ -690,6 +695,68 @@ async fn background_integral_float_timeout_is_normalized_on_the_wire() {
     assert!(
         !finished.exists(),
         "timeout must stop the command before it writes the sentinel"
+    );
+
+    drop(client);
+    server_task.await.expect("server closed");
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(10), server.shutdown_shell_tasks())
+            .await
+            .expect("process cleanup deadline"),
+        Some(peri_acp_types::tasks::TaskShutdownReport::Complete)
+    );
+}
+
+/// [回归测试] 有人值守会话的 owned 后台路径不限时：`timeout: 100.0` 被忽略，命令跑完并写出
+/// sentinel（曾把请求值悄悄压成 10 分钟并杀掉任务）。
+#[tokio::test]
+async fn attended_background_timeout_is_ignored_on_the_wire() {
+    let dir = tempfile::tempdir().expect("workspace");
+    let finished = dir.path().join("finished");
+    let server = WorkspaceMcpServer::standalone(dir.path().to_string_lossy(), false);
+    let (client, server_task) = connect(
+        server.clone(),
+        ClientCapabilities::builder().enable_tasks().build(),
+    )
+    .await;
+    let request = CallToolRequestParams::new("Bash").with_arguments(
+        serde_json::json!({
+            "command": "sleep 1; printf done > finished",
+            "run_in_background": true,
+            "timeout": 100.0
+        })
+        .as_object()
+        .expect("object")
+        .clone(),
+    );
+    let CallToolResponse::Task(created) = client
+        .peer()
+        .call_tool_once(request)
+        .await
+        .expect("background task")
+    else {
+        panic!("expected task handle")
+    };
+    let task_id = created.task.task_id;
+    let terminal = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let snapshot = client
+                .peer()
+                .get_task(GetTaskParams::new(&task_id))
+                .await
+                .expect("task status");
+            if snapshot.task.status().is_terminal() {
+                break snapshot;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("attended background command must run to completion");
+    assert_eq!(terminal.task.status(), TaskStatus::Completed);
+    assert!(
+        finished.exists(),
+        "attended sessions have no background time limit: the command must finish"
     );
 
     drop(client);

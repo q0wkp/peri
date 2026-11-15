@@ -21,6 +21,8 @@ use std::{collections::BTreeSet, sync::Arc};
 #[cfg(not(target_os = "emscripten"))]
 use parking_lot::Mutex;
 use peri_acp_types::builtin_mcp::find;
+#[cfg(not(target_os = "emscripten"))]
+use peri_acp_types::session_attendance::SessionAttendance;
 use thiserror::Error;
 
 #[cfg(not(target_os = "emscripten"))]
@@ -98,6 +100,12 @@ pub struct BuiltinInstanceContext {
     /// 不读配置、不派生根（AW3-11 模式）。`false` = 既有行为（未显式传参走前台）。
     #[cfg(not(target_os = "emscripten"))]
     pub workspace_bash_default_run_in_background: bool,
+    /// `workspace` 实例 Bash 所在会话的值守形态：决定后台任务是否有时限。
+    ///
+    /// 装配期一次注入（部署入口声明，print 等无人值守入口在装配面传入），dispatch 只读不改。
+    /// 缺省有人值守（后台不限时）。
+    #[cfg(not(target_os = "emscripten"))]
+    pub workspace_bash_attendance: SessionAttendance,
     /// A24 关闭集：`policy_key ∈ disabled_middlewares` 的实例名（唯一实现
     /// `mcp::builtin::closed_instances`，宿主经 `peri_middlewares::assembly` 的薄委托派生）。
     ///
@@ -129,6 +137,8 @@ impl BuiltinInstanceContext {
             workspace_resources: None,
             #[cfg(not(target_os = "emscripten"))]
             workspace_bash_default_run_in_background: false,
+            #[cfg(not(target_os = "emscripten"))]
+            workspace_bash_attendance: SessionAttendance::default(),
             closed: BTreeSet::new(),
             skills_face_closed: false,
         }
@@ -177,6 +187,13 @@ impl BuiltinInstanceContext {
     #[cfg(not(target_os = "emscripten"))]
     pub fn with_workspace_bash_default_run_in_background(mut self, default: bool) -> Self {
         self.workspace_bash_default_run_in_background = default;
+        self
+    }
+
+    /// 提供 `workspace` 实例 Bash 所在会话的值守形态（见 [`Self::workspace_bash_attendance`]）。
+    #[cfg(not(target_os = "emscripten"))]
+    pub fn with_workspace_bash_attendance(mut self, attendance: SessionAttendance) -> Self {
+        self.workspace_bash_attendance = attendance;
         self
     }
 

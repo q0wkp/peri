@@ -54,6 +54,15 @@ fn write_betas(target: &std::path::Path, betas: &str) {
 
 /// 生产装配的宿主配置（bare：只建 workspace 池 + 指定启动目录）。
 async fn beta_server_config(tmp: &tempfile::TempDir, startup_cwd: String) -> AcpServerConfig {
+    beta_server_config_with(tmp, startup_cwd, Default::default()).await
+}
+
+/// 同上，部署能力（含入口声明的会话值守形态）由调用方给定。
+async fn beta_server_config_with(
+    tmp: &tempfile::TempDir,
+    startup_cwd: String,
+    capabilities: crate::host::assemble::HostCapabilities,
+) -> AcpServerConfig {
     let config =
         make_peri_config_with_provider(make_provider_config("test", "openai", "key", "model"));
     let provider = LlmProvider::from_config(&config).unwrap();
@@ -63,7 +72,7 @@ async fn beta_server_config(tmp: &tempfile::TempDir, startup_cwd: String) -> Acp
         bare: true,
         drive_cron_tick: false,
         mcp_profile: peri_middlewares::mcp::apps::McpCapabilityProfile::disabled(),
-        capabilities: Default::default(),
+        capabilities,
     });
     cfg
 }
@@ -96,7 +105,17 @@ async fn create_session_with_bash_schema(
     Option<serde_json::Value>,
     HashMap<String, SessionState>,
 ) {
-    let cfg = beta_server_config(tmp, startup).await;
+    create_session_with_bash_schema_for(beta_server_config(tmp, startup).await, target).await
+}
+
+async fn create_session_with_bash_schema_for(
+    cfg: AcpServerConfig,
+    target: String,
+) -> (
+    String,
+    Option<serde_json::Value>,
+    HashMap<String, SessionState>,
+) {
     let transport: Arc<dyn crate::transport::AcpTransport> = Arc::new(MockTransport::default());
     let mut sessions = HashMap::new();
     let created = handle_request(
@@ -222,5 +241,46 @@ async fn restored_session_keeps_frozen_beta_flag() {
         bash["properties"]["run_in_background"]["default"],
         json!(false),
         "恢复会话的 Bash 缺省必须仍是前台（冻结值胜出）"
+    );
+}
+
+/// 部署入口声明的会话值守形态经生产装配链到达 builtin Bash 的超时规则：
+/// `HostCapabilities::attendance` → `BuiltinInstanceContext` → `standalone_for` → 工具 schema。
+/// 差分对照：print（无人值守文本 prompt）的后台默认时限是 10 分钟；未声明的部署（TUI / stdio）
+/// 有人值守，后台不限时。
+#[tokio::test]
+#[serial]
+async fn new_session_attendance_reaches_builtin_bash_timeout_rules() {
+    use peri_acp_types::session_attendance::SessionAttendance;
+    let timeout_description = |bash: Option<serde_json::Value>| {
+        bash.expect("builtin workspace 实例必须暴露 Bash")["properties"]["timeout"]["description"]
+            .as_str()
+            .expect("timeout 描述")
+            .to_string()
+    };
+
+    let (tmp, startup, target) = beta_fixture("");
+    let print_cfg = beta_server_config_with(
+        &tmp,
+        startup,
+        crate::host::assemble::HostCapabilities {
+            attendance: SessionAttendance::UnattendedTextPrompt,
+            ..Default::default()
+        },
+    )
+    .await;
+    let (_, bash, _sessions) = create_session_with_bash_schema_for(print_cfg, target).await;
+    let unattended = timeout_description(bash);
+    assert!(
+        unattended.contains("stopped after 600000ms") && !unattended.contains("no time limit"),
+        "无人值守文本 prompt 的后台默认时限必须是 10 分钟: {unattended}"
+    );
+
+    let (tmp, startup, target) = beta_fixture("");
+    let (_, bash, _sessions) = create_session_with_bash_schema(&tmp, startup, target).await;
+    let attended = timeout_description(bash);
+    assert!(
+        attended.contains("no time limit") && attended.contains("ignore `timeout`"),
+        "未声明值守形态的部署按有人值守处理，后台不限时: {attended}"
     );
 }

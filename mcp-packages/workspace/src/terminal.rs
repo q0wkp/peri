@@ -1,10 +1,14 @@
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 
+use crate::terminal_timeout::{
+    background_timeout_note, foreground_timeout_note, moved_task_limit_note,
+    moved_to_background_headline, seconds_label, timeout_param_description,
+};
+use peri_acp_types::session_attendance::SessionAttendance;
 use peri_acp_types::tasks::{OnBgCompleteFn, TaskManager};
 use peri_agent::agent::async_tasks::{
-    bg_shell_task_id, parse_background_timeout, parse_foreground_timeout, truncate_bytes,
-    BgTaskKind, FOREGROUND_MAX_TIMEOUT_MS,
+    bg_shell_task_id, is_sleep_command, truncate_bytes, BgTaskKind, ShellTimeoutPolicy,
 };
 use peri_agent::tools::{BaseTool, ToolExecutionEvidence, ToolExecutionStatus, ToolOutput};
 use peri_mcp_common::shell::{
@@ -35,23 +39,6 @@ fn background_cleanup_hint(pid: u32, platform: &str) -> String {
         "{stop}\n- A successful kill command only sends a termination request. Check errors and verify \
          process exit and the background completion notification before reporting cleanup complete."
     )
-}
-
-/// 前台 timeout 请求被界到上限时的回执说明（未改写时为空串）。
-/// 同步执行没有禁用超时的路径：`0` 与超过上限的请求都按上限执行。
-fn foreground_timeout_note(adjusted_from: Option<u64>) -> String {
-    match adjusted_from {
-        None => String::new(),
-        Some(0) => format!(
-            "\n- Note: `timeout: 0` cannot disable the timeout on the synchronous path; it was \
-             treated as the foreground maximum ({FOREGROUND_MAX_TIMEOUT_MS}ms)."
-        ),
-        Some(requested) => format!(
-            "\n- Note: the requested timeout ({requested}ms) exceeds the foreground maximum \
-             ({FOREGROUND_MAX_TIMEOUT_MS}ms); synchronous execution is capped there. Use \
-             `run_in_background: true` for work that needs longer."
-        ),
-    }
 }
 
 /// 前台超时分支的实时日志路径提示（摘要在超时前已开始落盘）。
@@ -91,6 +78,9 @@ pub struct BashTool {
     /// `default` 与描述同步该值，执行路径（[`Self::execute`] /
     /// `WorkspaceMcpServer::call_owned_bash`）按同一字段决策。
     pub default_run_in_background: bool,
+    /// 前台/后台/无人值守超时规则（装配期注入的值守形态 + 环境变量覆盖）。
+    /// 所有超时数值都从它推导，工具内不再维护第二份。
+    pub timeout_policy: ShellTimeoutPolicy,
 }
 
 impl BashTool {
@@ -101,7 +91,20 @@ impl BashTool {
             on_bg_complete: None,
             on_bg_started: None,
             default_run_in_background: false,
+            timeout_policy: ShellTimeoutPolicy::from_env(SessionAttendance::default()),
         }
+    }
+
+    /// 注入会话值守形态（会话装配输入；缺省为有人值守，后台任务不限时）。
+    pub fn with_session_attendance(mut self, attendance: SessionAttendance) -> Self {
+        self.timeout_policy = ShellTimeoutPolicy::from_env(attendance);
+        self
+    }
+
+    /// 直接指定超时规则（沿用既有规则实例，或测试注入固定环境）。
+    pub fn with_timeout_policy(mut self, policy: ShellTimeoutPolicy) -> Self {
+        self.timeout_policy = policy;
+        self
     }
 
     /// 注入 `run_in_background` 的有效缺省（会话装配输入；默认 false 与既有行为一致）。
@@ -352,10 +355,7 @@ impl BaseTool for BashTool {
                 "timeout": {
                     "type": "integer",
                     "minimum": 0,
-                    "maximum": 600000,
-                    "description": format!(
-                        "Optional timeout in milliseconds. The synchronous path is always bounded: it defaults to 15000ms and is capped at {FOREGROUND_MAX_TIMEOUT_MS}ms (2 minutes) — `timeout: 0` is treated as that maximum instead of disabling the timeout, so no request can produce an unbounded synchronous wait. Foreground timeout returns an error: if background task registration succeeds, the process is promoted and the tool returns a background task receipt carrying its task id (no pid or log paths), without a new timeout; otherwise termination is requested. Background tasks (run_in_background: true) run until completion: omitting `timeout` or setting `0` leaves that background command without a timeout, and a positive `timeout` (up to 600000ms) requests termination when reached. Check the returned process status before retrying; do not duplicate a task that is still running. For builds, installs, or tests, set a longer `timeout` up to the foreground maximum, or use run_in_background: true for work that needs longer."
-                    )
+                    "description": timeout_param_description(&self.timeout_policy)
                 },
                 "run_in_background": self.run_in_background_schema()
             },
@@ -434,8 +434,10 @@ impl BashTool {
                 "run_in_background is not available: no background task manager configured",
             )?);
 
-            // timeout 参数解析：未传/显式 0 → 不超时（后台语义：跑完为止）
-            let timeout_opt = parse_background_timeout(&input)?;
+            // 后台时限由会话规则决定：有人值守不限时（timeout 不生效），无人值守按
+            // 默认/显式值/上限；被忽略或改写的请求值写进回执，不静默。
+            let background_timeout = self.timeout_policy.parse_background(&input)?;
+            let timeout_opt = background_timeout.limit_ms;
 
             let command = command.to_string();
             let cwd = self.cwd.clone();
@@ -453,6 +455,10 @@ impl BashTool {
                  delivered to this session when it finishes. Do not start a duplicate while it is active.",
                 handle.task_id
             );
+            msg.push_str(&background_timeout_note(
+                &background_timeout,
+                &self.timeout_policy,
+            ));
             match handle.pid {
                 Some(pid) => {
                     let cleanup_hint = background_cleanup_hint(pid, std::env::consts::OS);
@@ -505,8 +511,13 @@ impl BashTool {
         // ── 同步执行路径 ──
         // 前台执行恒有界：`timeout: 0` 与超过上限的请求都界到前台上限，
         // 不存在禁用超时的同步路径（无 Option，结构上无法表达"不超时"）。
-        let (foreground_timeout_ms, adjusted_timeout) = parse_foreground_timeout(&input)?;
-        let timeout_note = foreground_timeout_note(adjusted_timeout);
+        let (foreground_timeout_ms, adjusted_timeout) =
+            self.timeout_policy.parse_foreground(&input)?;
+        let foreground_ceiling_ms = self.timeout_policy.foreground_ceiling_ms();
+        let timeout_note = foreground_timeout_note(adjusted_timeout, foreground_ceiling_ms);
+        let moved_limit_ms = self.timeout_policy.moved_to_background_limit_ms();
+        let moved_limit_note = moved_task_limit_note(&self.timeout_policy);
+        let headline = moved_to_background_headline(foreground_timeout_ms);
         let ownership = self
             .task_manager
             .as_ref()
@@ -616,7 +627,12 @@ impl BashTool {
                         .unwrap_or_else(|| "Process state: unavailable".to_string())
                 };
 
-                if let Some(task_manager) = self.task_manager.as_ref() {
+                // 以 `sleep` 开头的命令只是在等待，转后台没有意义：直接终止。
+                let background_manager = self
+                    .task_manager
+                    .as_ref()
+                    .filter(|_| !is_sleep_command(command));
+                if let Some(task_manager) = background_manager {
                     // ── 有 TaskManager：不杀进程，promote 为后台任务续跑 ──
                     let task_id = bg_shell_task_id();
                     let register_result =
@@ -640,24 +656,53 @@ impl BashTool {
                             let rejected_ticket = ticket.clone();
                             if let Err(error) = task_owner.spawn_owned(Box::pin(async move {
                                 let started = peri_time::monotonic_now();
-                                drain_output.await;
-                                // 已在前台回收的 leader 不能提供仍持管道的后代退出码。
-                                let (success, exit_code) = if let Some(status) = leader_status {
-                                    (status.success(), None)
-                                } else {
-                                    match execution.child_mut().wait().await {
-                                        Ok(s) => (s.success(), s.code()),
-                                        Err(e) => {
-                                            warn!(
-                                                error = %e,
-                                                task_id = %task_id_owned,
-                                                "promoted bg shell: wait failed"
-                                            );
-                                            kill_process_group(pid, "KILL");
-                                            let _ = execution.child_mut().wait().await;
-                                            (false, None)
+                                let wait_for_exit = async {
+                                    drain_output.as_mut().await;
+                                    // 已在前台回收的 leader 不能提供仍持管道的后代退出码。
+                                    if let Some(status) = leader_status {
+                                        (status.success(), None)
+                                    } else {
+                                        match execution.child_mut().wait().await {
+                                            Ok(s) => (s.success(), s.code()),
+                                            Err(e) => {
+                                                warn!(
+                                                    error = %e,
+                                                    task_id = %task_id_owned,
+                                                    "promoted bg shell: wait failed"
+                                                );
+                                                kill_process_group(pid, "KILL");
+                                                let _ = execution.child_mut().wait().await;
+                                                (false, None)
+                                            }
                                         }
                                     }
+                                };
+                                // 无人值守会话的转入任务从此刻起受后台时限约束；到时杀整个
+                                // 进程组并等真实终态，再以 timed_out 收尾通知模型。
+                                let (success, exit_code, timed_out) = match moved_limit_ms {
+                                    None => {
+                                        let (success, exit_code) = wait_for_exit.await;
+                                        (success, exit_code, false)
+                                    }
+                                    Some(limit_ms) => match timeout(
+                                        Duration::from_millis(limit_ms),
+                                        wait_for_exit,
+                                    )
+                                    .await
+                                    {
+                                        Ok((success, exit_code)) => (success, exit_code, false),
+                                        Err(_elapsed) => {
+                                            kill_process_group(pid, "KILL");
+                                            let exit_code = execution
+                                                .child_mut()
+                                                .wait()
+                                                .await
+                                                .ok()
+                                                .and_then(|status| status.code());
+                                            drain_output.as_mut().await;
+                                            (false, exit_code, true)
+                                        }
+                                    },
                                 };
                                 let stdout = match stdout_buf.lock() {
                                     Ok(g) => g.clone(),
@@ -677,7 +722,7 @@ impl BashTool {
                                     success,
                                     combined,
                                     started.elapsed().as_millis() as u64,
-                                    false,
+                                    timed_out,
                                     Some(background_output.finish(exit_code)),
                                 );
                             })) {
@@ -703,13 +748,12 @@ impl BashTool {
                             let cleanup_hint = background_cleanup_hint(pid, std::env::consts::OS);
                             let log_hint = foreground_log_hint(&output_capture);
                             let recovery = format!(
-                                "Command timed out. The process is still running and has been promoted to a background task.\ntask_id: {task_id}\npid: {pid}{log_hint}\n{cleanup_hint}{timeout_note}\nDo not rerun the command while it is active; its result will be delivered to this session when it finishes. Check the Tasks panel or read its live logs."
+                                "{headline}. The process is still running.\ntask_id: {task_id}\npid: {pid}{log_hint}\n{cleanup_hint}{timeout_note}{moved_limit_note}\nDo not rerun the command while it is active; its result will be delivered to this session when it finishes. Check the Tasks panel or read its live logs."
                             );
                             if has_output {
                                 // 有部分输出：进程在产生进展，续跑是合理的
                                 return Ok(BashOutput::with_execution(format!(
-                                    "Command timed out after {:.1}s. The process is still running and has been promoted to a background task (it was producing output, so it is likely progressing).\ntask_id: {task_id}\npid: {pid}\n{ps_line}\n- It continues running in the background; its result will be delivered to this session when it finishes.{log_hint}\n{cleanup_hint}\n{timeout_note}\n{partial_hint}\nCommand that timed out: {command}",
-                                    foreground_timeout_ms as f64 / 1000.0
+                                    "{headline} (it was producing output, so it is likely progressing).\ntask_id: {task_id}\npid: {pid}\n{ps_line}\n- It continues running in the background; its result will be delivered to this session when it finishes.{log_hint}\n{cleanup_hint}{timeout_note}{moved_limit_note}\n{partial_hint}\nCommand that timed out: {command}"
                                 ), ToolExecutionEvidence {
                                     status: ToolExecutionStatus::RunningAfterTimeout,
                                     exit_code: None,
@@ -721,8 +765,7 @@ impl BashTool {
                             // 无输出：进程可能挂起（等输入/资源）而非正常变慢——
                             // 仍 promote（避免误杀静默启动的慢任务），但如实说明不确定性
                             return Ok(BashOutput::with_execution(format!(
-                                "Command timed out after {:.1}s with no output produced. The process is still running and has been promoted to a background task, but it may never complete on its own. If it finishes, its result will be delivered to this session.\ntask_id: {task_id}\npid: {pid}\n{ps_line}\nLikely causes:\n- The command is waiting for input or for a resource (network, lock, another process) that will never arrive.\n- It is a long-running service/daemon; it should have been started with run_in_background: true.\n- It is a slow command still in a silent startup phase (e.g. compile/install with no output yet).{log_hint}\n{cleanup_hint}\n{timeout_note}\n{partial_hint}\nCommand that timed out: {command}",
-                                foreground_timeout_ms as f64 / 1000.0
+                                "{headline} (no output was produced). The process is still running but may never complete on its own. If it finishes, its result will be delivered to this session.\ntask_id: {task_id}\npid: {pid}\n{ps_line}\nLikely causes:\n- The command is waiting for input or for a resource (network, lock, another process) that will never arrive.\n- It is a long-running service/daemon; it should have been started with run_in_background: true.\n- It is a slow command still in a silent startup phase (e.g. compile/install with no output yet).{log_hint}\n{cleanup_hint}{timeout_note}{moved_limit_note}\n{partial_hint}\nCommand that timed out: {command}"
                             ), ToolExecutionEvidence {
                                 status: ToolExecutionStatus::RunningAfterTimeout,
                                 exit_code: None,
@@ -740,8 +783,8 @@ impl BashTool {
                             output_capture.cleanup().await;
                             return Ok(BashOutput::with_execution(
                                 format!(
-                                    "Command timed out after {:.1}s and could not be promoted to a background task: {e}. The process group has been terminated.\n{ps_line}\n{timeout_note}\n{partial_hint}\nCommand that timed out: {command}",
-                                    foreground_timeout_ms as f64 / 1000.0
+                                    "Command timed out after {} and could not be promoted to a background task: {e}. The process group has been terminated.\n{ps_line}\n{timeout_note}\n{partial_hint}\nCommand that timed out: {command}",
+                                    seconds_label(foreground_timeout_ms)
                                 ),
                                 ToolExecutionEvidence {
                                     status: ToolExecutionStatus::TimedOut,
@@ -760,18 +803,23 @@ impl BashTool {
                     drain_output.await;
                     execution.confirm_stopped();
                     output_capture.cleanup().await;
+                    let why_not_moved = if is_sleep_command(command) {
+                        "commands starting with `sleep` are stopped at their timeout instead of being moved to the background"
+                    } else {
+                        "background tasks are unavailable here, so it could not be moved to the background"
+                    };
                     return Ok(BashOutput::with_execution(
                         format!(
-                            "Command timed out after {:.1}s. The synchronous path is always bounded (default 15s, maximum {FOREGROUND_MAX_TIMEOUT_MS}ms) to encourage efficient commands.\n\
+                            "Command timed out after {} and was terminated ({why_not_moved}).\n\
                          {ps_line}\n\
                          Options:\n\
                          - Optimize the command: avoid scanning large directories (e.g. use `find . -maxdepth 3` instead of `find /Users/...`), add `| head`, or use fd/rg instead of find/grep.\n\
-                         - Increase timeout: set `timeout` parameter to a larger value (the foreground maximum is `timeout: {FOREGROUND_MAX_TIMEOUT_MS}` for 2 minutes).\n\
+                         - Increase timeout: set `timeout` to a larger value (the foreground maximum is `timeout: {foreground_ceiling_ms}`).\n\
                          - Use background mode: set `run_in_background: true` for long-running servers/builds/installs.\n\
                          {timeout_note}\n\
                          {partial_hint}\n\
                          Command that timed out: {command}",
-                            foreground_timeout_ms as f64 / 1000.0
+                            seconds_label(foreground_timeout_ms)
                         ),
                         ToolExecutionEvidence {
                             status: ToolExecutionStatus::TimedOut,

@@ -14,6 +14,7 @@ mod rewind_snapshot;
 mod shell_hints;
 mod shell_tasks;
 pub mod terminal;
+mod terminal_timeout;
 mod workspace;
 
 pub use git_watch::{GitWatchState, GIT_REF_RESOURCE_URI};

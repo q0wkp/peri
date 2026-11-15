@@ -159,6 +159,7 @@ async fn restricted_deployment_omits_local_optional_capabilities_in_session() {
         cron: false,
         plugins: false,
         settings_hooks: false,
+        attendance: Default::default(),
     };
     let cfg = deployment_with_capabilities(&tmp, true, capabilities).await;
     assert!(cfg.cron_scheduler.is_none());

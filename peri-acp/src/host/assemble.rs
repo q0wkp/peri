@@ -56,6 +56,8 @@ pub struct HostCapabilities {
     pub cron: bool,
     pub plugins: bool,
     pub settings_hooks: bool,
+    /// 部署入口声明的会话值守形态；Bash 后台时限由它决定（缺省有人值守，不限时）。
+    pub attendance: peri_acp_types::session_attendance::SessionAttendance,
 }
 
 impl Default for HostCapabilities {
@@ -66,6 +68,7 @@ impl Default for HostCapabilities {
             cron: true,
             plugins: true,
             settings_hooks: true,
+            attendance: Default::default(),
         }
     }
 }
@@ -287,6 +290,7 @@ pub async fn assemble_wasm_server_config(input: WasmHostAssemblyInput) -> AcpSer
             cron: false,
             plugins: false,
             settings_hooks: false,
+            attendance: Default::default(),
         },
     )
     .await
@@ -594,9 +598,9 @@ pub(crate) async fn assemble_server_config_with_mcp_profile(
         // beta flag 投影（会话冻结）：Bash 的 `run_in_background` 有效缺省随本上下文
         // 一次注入；装配面只传值，dispatch 不读配置、不解析 flag 语义。
         #[cfg(not(target_os = "emscripten"))]
-        let builtin_context = builtin_context.with_workspace_bash_default_run_in_background(
-            workspace_bash_default_run_in_background,
-        );
+        let builtin_context = builtin_context
+            .with_workspace_bash_default_run_in_background(workspace_bash_default_run_in_background)
+            .with_workspace_bash_attendance(capabilities.attendance);
         let builtin_context = builtin_context
             .with_closed(builtin_closed)
             // W4b 收口：宿主技能面关闭位与关闭集同源（同一份 disabled 集合），

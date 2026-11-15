@@ -74,9 +74,12 @@ async fn test_sync_timeout_promote_no_output_diagnoses_stall() {
         .await
         .unwrap_err()
         .to_string();
-    assert!(err.contains("timed out"), "Err 应含 timed out: {err}");
     assert!(
-        err.contains("no output produced"),
+        err.contains("was moved to the background"),
+        "Err 应说明已转入后台: {err}"
+    );
+    assert!(
+        err.contains("no output was produced"),
         "无输出分支应明确说明: {err}"
     );
     assert!(
@@ -121,13 +124,16 @@ async fn test_sync_timeout_promote_with_output_notes_progress() {
         .await
         .unwrap_err()
         .to_string();
-    assert!(err.contains("timed out"), "Err 应含 timed out: {err}");
+    assert!(
+        err.contains("was moved to the background"),
+        "Err 应说明已转入后台: {err}"
+    );
     assert!(
         err.contains("producing output"),
         "有输出分支应说明有进展: {err}"
     );
     assert!(
-        !err.contains("no output produced"),
+        !err.contains("no output was produced"),
         "有输出分支不应走无输出文案: {err}"
     );
 
