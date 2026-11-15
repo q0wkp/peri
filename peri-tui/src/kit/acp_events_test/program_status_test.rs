@@ -3,7 +3,7 @@
 use super::*;
 use crate::kit::acp_types::BgTaskSnapshotSource;
 use crate::kit::program_status::{BlockedKind, ProgramStatus};
-use crate::kit::test_support::NotificationGuard;
+use crate::kit::test_support::{AtomsGuard, NotificationGuard};
 
 fn current() -> ProgramStatus {
     *crate::kit::atoms::PROGRAM_STATUS.state().read()
@@ -308,6 +308,7 @@ fn agent_completion_while_new_turn_runs_keeps_working() {
 #[test]
 #[serial]
 fn async_agent_does_not_override_blocked_or_error() {
+    let _popup = AtomsGuard::new().take(&crate::kit::atoms::POPUP_KIND);
     let mut state = reset();
     set_bg_tasks(vec![bg_entry("agent-1", "agent", Some("running"))]);
 
