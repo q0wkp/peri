@@ -290,6 +290,45 @@ esac
         result = self.run_installer()
         self.assert_install_succeeded(result, payload)
 
+    def make_local_build(self, version="0.2.0"):
+        binary = self.root / "local build" / "peri"
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        payload = f"#!/bin/sh\nprintf 'peri {version}\\n'\n".encode()
+        binary.write_bytes(payload)
+        binary.chmod(0o755)
+        return binary, payload
+
+    def test_local_build_installs_without_network(self):
+        binary, payload = self.make_local_build()
+        resources = self.root / "sidecar out"
+        sidecar = resources / "peri-resources" / "workflow" / SIDECAR_ID
+        sidecar.mkdir(parents=True)
+        (sidecar / "package.json").write_text("{}")
+        self.environment.update(PERI_INSTALL_LOCAL=str(binary),
+                                PERI_INSTALL_LOCAL_RESOURCES=str(resources))
+        result = self.run_installer()
+        self.assert_install_succeeded(result, payload)
+        installed = self.install_dir / VERSION_TAG / "peri-resources" / "workflow" / SIDECAR_ID
+        self.assertEqual((installed / "package.json").read_text(), "{}")
+        self.assertFalse(self.download_log.exists() and self.download_log.read_text().strip())
+
+    def test_local_build_default_version_dir(self):
+        binary, payload = self.make_local_build(version="1.2.3")
+        self.environment.pop("PERI_INSTALL_VERSION")
+        self.environment.update(PERI_INSTALL_LOCAL=str(binary))
+        result = self.run_installer()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("workflow sidecar resources are not installed", result.stdout + result.stderr)
+        tag = (self.install_dir / "current-version.txt").read_text().strip()
+        self.assertRegex(tag, r"^agent-v1\.2\.3-local\.\d{14}$")
+        self.assertEqual((self.install_dir / tag / "peri").read_bytes(), payload)
+        self.assertEqual((self.install_dir / "peri").resolve(),
+                         (self.install_dir / tag / "peri").resolve())
+
+    def test_local_build_missing_binary_is_rejected(self):
+        self.environment.update(PERI_INSTALL_LOCAL=str(self.root / "missing" / "peri"))
+        self.assert_install_rejected(self.run_installer())
+
     def test_unsupported_platform(self):
         self.environment.update(MOCK_SYSTEM="Linux", MOCK_ARCHITECTURE="ppc64le")
         self.assert_install_rejected(self.run_installer())

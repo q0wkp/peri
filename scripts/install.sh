@@ -14,9 +14,13 @@ export LC_ALL=C
 #   GITHUB_TOKEN           GitHub personal access token (bypasses API rate limiting)
 #   PERI_NO_PATH_HINT      Set to 1 to skip PATH hint
 #   PERI_INSTALL_PLATFORM  Override platform detection (e.g. linux-x86_64, macos-aarch64)
+#   PERI_INSTALL_LOCAL     Install this locally built peri binary instead of downloading a release
+#                          (version dir: PERI_INSTALL_VERSION, default agent-v<version>-local.<time>)
+#   PERI_INSTALL_LOCAL_RESOURCES  Directory holding peri-resources/ (workflow sidecar) for a local install
 #
 # Example:
 #   PERI_INSTALL_VERSION=agent-v1.17 bash install.sh
+#   PERI_INSTALL_LOCAL=target/release/peri bash scripts/install.sh
 #   GITHUB_PROXY=https://ghproxy.com/https://github.com curl ... | bash
 #   GITHUB_API_PROXY=https://gh-proxy.com/https://api.github.com curl ... | bash
 #   GITHUB_TOKEN=ghp_xxx curl ... | bash
@@ -223,19 +227,9 @@ cleanup_old_versions() {
     esac
 }
 
-# --- Main ---
-main() {
-    INSTALL_DIR="${PERI_INSTALL_DIR:-${HOME}/.peri}"
-    GITHUB_API="https://api.github.com/repos/konghayao/peri"
-    RELEASES_DOWNLOAD_BASE="https://github.com/konghayao/peri/releases/download"
-
-    echo ""
-    info "Peri Agent Installer"
-    info "-------------------------------"
-
-    PLATFORM=$(detect_platform)
-    ASSET_NAME="peri-${PLATFORM}.tar.gz"
-
+# --- Install from GitHub Release ---
+# 解析版本、下载并校验发布归档，解压到 VERSION_DIR；设置 VERSION_TAG / VERSION_DIR / TARGET。
+install_release_binary() {
     # 解析版本与资产 URL。固定版本时不查询 API：下载地址由 tag 与发布命名契约
     # （<asset>、checksums.txt）唯一确定，受限网络中 api.github.com 不必可达。
     RELEASE_JSON=""
@@ -349,6 +343,63 @@ main() {
             ls -la "${VERSION_DIR}" || true
             exit 1
         fi
+    fi
+}
+
+# --- Install from a local build ---
+# 安装本地编译的二进制（PERI_INSTALL_LOCAL），不访问网络；目录布局与发布归档一致，
+# 后续软链接、current-version.txt 与 PATH 设置与 Release 安装共用。
+install_local_binary() {
+    local source="${PERI_INSTALL_LOCAL}"
+    if [[ ! -f "${source}" || ! -x "${source}" ]]; then
+        error "PERI_INSTALL_LOCAL is not an executable file: ${source}"
+        exit 1
+    fi
+    local version
+    version=$("${source}" --version 2>/dev/null | awk '{print $NF}' || true)
+    VERSION_TAG="${PERI_INSTALL_VERSION:-agent-v${version:-0}-local.$(date +%Y%m%d%H%M%S)}"
+    info "Local build: ${source} (${VERSION_TAG})"
+
+    VERSION_DIR="${INSTALL_DIR}/${VERSION_TAG}"
+    TARGET="${VERSION_DIR}/peri"
+    mkdir -p "${VERSION_DIR}"
+    # 先写临时文件再改名：重装同一版本时不会在正在运行的 peri 上原地覆盖。
+    cp "${source}" "${TARGET}.tmp"
+    mv -f "${TARGET}.tmp" "${TARGET}"
+
+    # workflow sidecar 由 scripts/build-workflow-sidecar.sh 生成（需要 bun），发布归档把
+    # peri-resources/ 放在二进制旁边；本地安装按同一布局复制。
+    local resources="${PERI_INSTALL_LOCAL_RESOURCES:-}"
+    if [[ -n "${resources}" ]]; then
+        if [[ ! -d "${resources}/peri-resources" ]]; then
+            error "PERI_INSTALL_LOCAL_RESOURCES has no peri-resources/: ${resources}"
+            exit 1
+        fi
+        rm -rf "${VERSION_DIR}/peri-resources"
+        cp -R "${resources}/peri-resources" "${VERSION_DIR}/peri-resources"
+        info "Installed resources from: ${resources}"
+    else
+        warn "PERI_INSTALL_LOCAL_RESOURCES not set: workflow sidecar resources are not installed."
+    fi
+}
+
+# --- Main ---
+main() {
+    INSTALL_DIR="${PERI_INSTALL_DIR:-${HOME}/.peri}"
+    GITHUB_API="https://api.github.com/repos/konghayao/peri"
+    RELEASES_DOWNLOAD_BASE="https://github.com/konghayao/peri/releases/download"
+
+    echo ""
+    info "Peri Agent Installer"
+    info "-------------------------------"
+
+    PLATFORM=$(detect_platform)
+    ASSET_NAME="peri-${PLATFORM}.tar.gz"
+
+    if [[ -n "${PERI_INSTALL_LOCAL:-}" ]]; then
+        install_local_binary
+    else
+        install_release_binary
     fi
 
     # Make executable
