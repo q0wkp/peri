@@ -8,6 +8,7 @@ use crate::acp_client::InteractionOwner;
 use crate::app::panel_types::PanelKind;
 use crate::kit::acp_types::PendingInteraction;
 use crate::kit::atoms::{ACTIVE_PANEL, ASK_USER_PENDING, OPEN_PANELS, POPUP_KIND, PopupKind};
+use crate::kit::test_support::NotificationGuard;
 use ratatui_kit::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serial_test::serial;
 
@@ -21,7 +22,7 @@ struct ConfirmAtomsGuard {
     ask_user: Option<AskUserPending>,
     open: Vec<PanelKind>,
     active: Option<PanelKind>,
-    notification: Option<String>,
+    _notification: NotificationGuard,
 }
 
 impl ConfirmAtomsGuard {
@@ -32,14 +33,13 @@ impl ConfirmAtomsGuard {
             ask_user: ASK_USER_PENDING.state().read().clone(),
             open: OPEN_PANELS.state().read().clone(),
             active: *ACTIVE_PANEL.state().read(),
-            notification: notification_message(),
+            _notification: NotificationGuard::install(),
         };
         *CONFIRM_PAYLOAD.state().write() = None;
         *POPUP_KIND.state().write() = None;
         *ASK_USER_PENDING.state().write() = None;
         *OPEN_PANELS.state().write() = Vec::new();
         *ACTIVE_PANEL.state().write() = None;
-        *NOTIFICATION.state().write() = None;
         previous
     }
 }
@@ -51,11 +51,6 @@ impl Drop for ConfirmAtomsGuard {
         *ASK_USER_PENDING.state().write() = self.ask_user.take();
         *OPEN_PANELS.state().write() = std::mem::take(&mut self.open);
         *ACTIVE_PANEL.state().write() = self.active;
-        // Notification 非 Clone：按原消息重新发布。
-        *NOTIFICATION.state().write() = self.notification.take().map(|message| Notification {
-            message,
-            until: peri_time::monotonic_now() + std::time::Duration::from_secs(6),
-        });
     }
 }
 

@@ -6,6 +6,7 @@
 //! 身份捕获与复验语义与生产路径同源；RPC 往返与 spawn 调度本身只能由人工 / 端到端验证覆盖。
 
 use super::*;
+use crate::kit::test_support::NotificationGuard;
 use serial_test::serial;
 
 #[test]
@@ -184,7 +185,7 @@ struct PanelStateGuard {
     bridge_reset: u64,
     scope: ThreadBrowserScope,
     archived: bool,
-    notification: Option<String>,
+    _notification: NotificationGuard,
 }
 
 impl PanelStateGuard {
@@ -199,11 +200,7 @@ impl PanelStateGuard {
             bridge_reset: BRIDGE_RESET_COUNTER.get(),
             scope: THREAD_BROWSER_SCOPE.get(),
             archived: THREAD_BROWSER_ARCHIVED.get(),
-            notification: NOTIFICATION
-                .state()
-                .read()
-                .as_ref()
-                .map(|notice| notice.message.clone()),
+            _notification: NotificationGuard::install(),
         };
         *THREAD_LIST.state().write() = vec![thread("t1"), thread("t2")];
         THREAD_LIST_ERROR.set(Some("baseline error".to_owned()));
@@ -211,7 +208,6 @@ impl PanelStateGuard {
         BRIDGE_RESET_COUNTER.set(0);
         THREAD_BROWSER_SCOPE.set(ThreadBrowserScope::Project);
         THREAD_BROWSER_ARCHIVED.set(false);
-        NOTIFICATION.set(None);
         guard
     }
 }
@@ -224,11 +220,6 @@ impl Drop for PanelStateGuard {
         BRIDGE_RESET_COUNTER.set(self.bridge_reset);
         THREAD_BROWSER_SCOPE.set(self.scope);
         THREAD_BROWSER_ARCHIVED.set(self.archived);
-        // `Notification` 不可 Clone：按原消息重新发布。
-        NOTIFICATION.set(self.notification.take().map(|message| Notification {
-            message,
-            until: peri_time::monotonic_now() + Duration::from_secs(2),
-        }));
     }
 }
 

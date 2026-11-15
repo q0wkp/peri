@@ -1,4 +1,5 @@
 use super::*;
+use crate::kit::test_support::NotificationGuard;
 use peri_acp::transport::{
     AcpTransport,
     mpsc::mpsc_transport_pair,
@@ -27,7 +28,7 @@ struct ScopeGuard {
     session: String,
     reset: u64,
     error: Option<String>,
-    notice: Option<crate::kit::atoms::Notification>,
+    _notification: NotificationGuard,
 }
 
 impl ScopeGuard {
@@ -36,7 +37,7 @@ impl ScopeGuard {
             session: ACTIVE_SESSION_ID.state().read().clone(),
             reset: BRIDGE_RESET_COUNTER.get(),
             error: CRON_ACTION_ERROR.state().read().clone(),
-            notice: crate::kit::atoms::NOTIFICATION.state().write().take(),
+            _notification: NotificationGuard::install(),
         };
         ACTIVE_SESSION_ID.set("session-a".to_string());
         CRON_ACTION_ERROR.set(None);
@@ -50,7 +51,6 @@ impl Drop for ScopeGuard {
         ACTIVE_SESSION_ID.set(std::mem::take(&mut self.session));
         BRIDGE_RESET_COUNTER.set(self.reset);
         CRON_ACTION_ERROR.set(self.error.take());
-        crate::kit::atoms::NOTIFICATION.set(self.notice.take());
         REQUESTS.with(|requests| *requests.borrow_mut() = None);
     }
 }

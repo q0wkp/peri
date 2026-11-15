@@ -1,5 +1,6 @@
 use super::*;
 use crate::kit::steer_state::SteerState;
+use crate::kit::test_support::NotificationGuard;
 use peri_acp::transport::{
     AcpTransport,
     mpsc::{MpscServerTransport, mpsc_transport_pair},
@@ -738,14 +739,6 @@ pub(super) fn notice_text() -> Option<String> {
         .map(|notice| notice.message.clone())
 }
 
-/// 通知不可 Clone；按原消息重新发布，避免测试清掉其它用例留下的状态。
-pub(super) fn restore_notice(previous: Option<String>) {
-    atoms::NOTIFICATION.set(previous.map(|message| atoms::Notification {
-        message,
-        until: std::time::Instant::now() + FAILURE_NOTICE_DURATION,
-    }));
-}
-
 /// 慢准备（超过受理回执预算）仍须被受理。
 ///
 /// 准备阶段与会话已发出请求的回执不是同一预算：建会话要继续完成工作区发现、
@@ -759,8 +752,7 @@ async fn test_slow_session_preparation_is_not_capped_by_receipt_deadline() {
         session: atoms::ACTIVE_SESSION_ID.state().read().clone(),
         epoch: atoms::BRIDGE_RESET_COUNTER.get(),
     };
-    let previous_notice = notice_text();
-    atoms::NOTIFICATION.set(None);
+    let _notification = NotificationGuard::install();
     atoms::ACTIVE_SESSION_ID.set(String::new());
     atoms::BRIDGE_RESET_COUNTER.set(31);
     STEERS.set(SteerState::default());
@@ -884,7 +876,6 @@ async fn test_slow_session_preparation_is_not_capped_by_receipt_deadline() {
     );
     shutdown.cancel();
     handle.await.unwrap();
-    restore_notice(previous_notice);
     client.close();
 }
 

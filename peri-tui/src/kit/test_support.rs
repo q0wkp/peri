@@ -13,6 +13,15 @@ impl NotificationGuard {
     pub(crate) fn install() -> Self {
         Self(NOTIFICATION.state().write().take())
     }
+
+    /// 当前通知文案；`Notification` 非 `Clone`，断言只需要文本。
+    pub(crate) fn message() -> Option<String> {
+        NOTIFICATION
+            .state()
+            .read()
+            .as_ref()
+            .map(|notice| notice.message.clone())
+    }
 }
 
 impl Drop for NotificationGuard {

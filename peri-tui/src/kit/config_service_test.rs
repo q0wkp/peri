@@ -9,7 +9,8 @@
 use super::{DraftSaveError, persist_candidate_with, persist_draft_with};
 use crate::config::{ConfigSource, ConfigurationRevision, PeriConfig};
 use crate::i18n;
-use crate::kit::atoms::{NOTIFICATION, Notification};
+use crate::kit::atoms::NOTIFICATION;
+use crate::kit::test_support::NotificationGuard;
 use fluent_bundle::FluentValue;
 use serial_test::serial;
 use std::time::Duration;
@@ -19,30 +20,15 @@ use std::time::Duration;
 const SAVED_TTL_FLOOR: Duration = Duration::from_millis(900);
 const SAVE_FAILED_TTL_FLOOR: Duration = Duration::from_millis(1900);
 
-/// 全局提示的保存/恢复——断言失败也不污染其它用例。
-struct NotificationGuard(Option<Notification>);
-
-impl NotificationGuard {
-    fn install() -> Self {
-        Self(std::mem::take(&mut *NOTIFICATION.state().write()))
-    }
-
-    /// 最近一次提示的文案与剩余时长。
-    fn latest(&self) -> (String, Duration) {
-        let binding = NOTIFICATION.state();
-        let state = binding.read();
-        let note = state.as_ref().expect("落盘结果必须给出可见提示");
-        (
-            note.message.clone(),
-            note.until - peri_time::monotonic_now(),
-        )
-    }
-}
-
-impl Drop for NotificationGuard {
-    fn drop(&mut self) {
-        *NOTIFICATION.state().write() = self.0.take();
-    }
+/// 最近一次提示的文案与剩余时长。
+fn latest_notice() -> (String, Duration) {
+    let binding = NOTIFICATION.state();
+    let state = binding.read();
+    let note = state.as_ref().expect("落盘结果必须给出可见提示");
+    (
+        note.message.clone(),
+        note.until - peri_time::monotonic_now(),
+    )
 }
 
 /// 候选配置（与 `PeriConfig::default()` 可区分，便于断言落盘入口收到的内容）。
@@ -56,7 +42,7 @@ fn candidate() -> PeriConfig {
 #[test]
 #[serial]
 fn success_reports_saved_with_one_second_ttl() {
-    let guard = NotificationGuard::install();
+    let _notification = NotificationGuard::install();
     let candidate = candidate();
     let mut saved: Option<PeriConfig> = None;
     let mut save_calls = 0usize;
@@ -70,7 +56,7 @@ fn success_reports_saved_with_one_second_ttl() {
     assert!(persisted, "落盘成功必须返回 true（调用方据此提交）");
     assert_eq!(save_calls, 1, "候选只落盘一次");
     assert_eq!(saved, Some(candidate), "落盘入口必须收到调用方持有的候选");
-    let (message, ttl) = guard.latest();
+    let (message, ttl) = latest_notice();
     assert_eq!(message, i18n::tr("config-saved"));
     assert!(
         ttl > SAVED_TTL_FLOOR && ttl <= Duration::from_secs(1),
@@ -82,7 +68,7 @@ fn success_reports_saved_with_one_second_ttl() {
 #[test]
 #[serial]
 fn failure_reports_reason_with_two_second_ttl() {
-    let guard = NotificationGuard::install();
+    let _notification = NotificationGuard::install();
     let candidate = candidate();
     let mut save_calls = 0usize;
 
@@ -93,7 +79,7 @@ fn failure_reports_reason_with_two_second_ttl() {
 
     assert!(!persisted, "落盘失败必须返回 false（调用方据此不提交）");
     assert_eq!(save_calls, 1);
-    let (message, ttl) = guard.latest();
+    let (message, ttl) = latest_notice();
     assert_eq!(
         message,
         i18n::tr_args(
@@ -127,7 +113,7 @@ fn revision() -> ConfigurationRevision {
 #[test]
 #[serial]
 fn draft_save_passes_expected_revision_and_returns_accepted_snapshot() {
-    let guard = NotificationGuard::install();
+    let _notification = NotificationGuard::install();
     let candidate = candidate();
     let expected = revision();
     let mut accepted = candidate.clone();
@@ -145,7 +131,7 @@ fn draft_save_passes_expected_revision_and_returns_accepted_snapshot() {
         accepted,
         "调用方只能发布 authority 接纳后的快照"
     );
-    let (message, ttl) = guard.latest();
+    let (message, ttl) = latest_notice();
     assert_eq!(message, i18n::tr("config-saved"));
     assert!(
         ttl > SAVED_TTL_FLOOR && ttl <= Duration::from_secs(1),
@@ -157,13 +143,13 @@ fn draft_save_passes_expected_revision_and_returns_accepted_snapshot() {
 #[test]
 #[serial]
 fn draft_save_reports_revision_conflict_separately() {
-    let guard = NotificationGuard::install();
+    let _notification = NotificationGuard::install();
     let expected = revision();
 
     let result = persist_draft_with(&candidate(), expected, |_, _| Err(DraftSaveError::Conflict));
 
     assert!(matches!(result, Err(DraftSaveError::Conflict)));
-    let (message, ttl) = guard.latest();
+    let (message, ttl) = latest_notice();
     assert_eq!(message, i18n::tr("config-draft-conflict"));
     assert!(
         ttl > Duration::from_millis(2900) && ttl <= Duration::from_secs(3),
@@ -175,7 +161,7 @@ fn draft_save_reports_revision_conflict_separately() {
 #[test]
 #[serial]
 fn draft_save_reports_generic_failure_with_reason() {
-    let guard = NotificationGuard::install();
+    let _notification = NotificationGuard::install();
     let expected = revision();
 
     let result = persist_draft_with(&candidate(), expected, |_, _| {
@@ -183,7 +169,7 @@ fn draft_save_reports_generic_failure_with_reason() {
     });
 
     assert!(matches!(result, Err(DraftSaveError::Failed(_))));
-    let (message, ttl) = guard.latest();
+    let (message, ttl) = latest_notice();
     assert_eq!(
         message,
         i18n::tr_args(
