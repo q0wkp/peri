@@ -38,22 +38,19 @@ fn decode_ignores_malformed_or_missing_meta() {
     assert!(decode(&serde_json::json!({"_meta": {"peri.recovery": {"status": "nope"}}})).is_none());
 }
 
-struct NotificationGuard(Option<String>);
+/// 取走并清空全局通知，结束（含 panic）时原样放回：`is_none()` 断言不能依赖
+/// 其他测试恰好没留下通知。
+struct NotificationGuard(Option<Notification>);
 
 impl NotificationGuard {
     fn capture() -> Self {
-        let state = NOTIFICATION.state();
-        let notice = state.read();
-        Self(notice.as_ref().map(|notice| notice.message.clone()))
+        Self(NOTIFICATION.state().write().take())
     }
 }
 
 impl Drop for NotificationGuard {
     fn drop(&mut self) {
-        NOTIFICATION.set(self.0.take().map(|message| Notification {
-            message,
-            until: peri_time::monotonic_now() + std::time::Duration::from_secs(1),
-        }));
+        NOTIFICATION.set(self.0.take());
     }
 }
 

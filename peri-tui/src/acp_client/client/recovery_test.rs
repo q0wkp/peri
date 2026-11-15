@@ -61,23 +61,19 @@ impl UiAtomsGuard {
     }
 }
 
-/// 通知没有 `Clone`：按消息文本保存/恢复，避免全局 atom 在并行测试间泄漏。
-struct NotificationGuard(Option<String>);
+/// 取走并清空全局通知，结束（含 panic）时原样放回：`is_none()` 断言不能依赖
+/// 其他测试恰好没留下通知。
+struct NotificationGuard(Option<atoms::Notification>);
 
 impl NotificationGuard {
     fn capture() -> Self {
-        let state = atoms::NOTIFICATION.state();
-        let notice = state.read();
-        Self(notice.as_ref().map(|notice| notice.message.clone()))
+        Self(atoms::NOTIFICATION.state().write().take())
     }
 }
 
 impl Drop for NotificationGuard {
     fn drop(&mut self) {
-        atoms::NOTIFICATION.set(self.0.take().map(|message| atoms::Notification {
-            message,
-            until: peri_time::monotonic_now() + Duration::from_secs(1),
-        }));
+        atoms::NOTIFICATION.set(self.0.take());
     }
 }
 
