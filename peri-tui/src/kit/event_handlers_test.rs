@@ -12,6 +12,7 @@ fn setup_atoms() {
 }
 
 #[test]
+#[serial_test::serial]
 fn test_setup_atoms_initializes_empty() {
     setup_atoms();
     assert!(OPEN_PANELS.state().read().is_empty());

@@ -144,6 +144,7 @@ async fn test_empty_agent_text_skipped() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_creates_session_when_missing() {
     let (client, _server_transport) = make_client_without_pump();
     let cwd = ".".to_string();

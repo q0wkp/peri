@@ -51,6 +51,7 @@ fn plugin(scope: &str) -> PluginSummary {
 }
 
 #[test]
+#[serial]
 fn keyboard_and_mouse_select_the_same_semantic_request_for_all_scopes() {
     let area = Rect::new(4, 7, 60, 30);
     for scope in ["user", "project", "local"] {
@@ -102,6 +103,7 @@ fn keyboard_and_mouse_select_the_same_semantic_request_for_all_scopes() {
 }
 
 #[test]
+#[serial]
 fn old_session_completion_cannot_clear_a_new_pending_operation() {
     let mut state = OperationState::default();
     let first = state.begin(
@@ -125,6 +127,7 @@ fn old_session_completion_cannot_clear_a_new_pending_operation() {
 }
 
 #[test]
+#[serial]
 fn installed_mutations_require_a_writable_scope_and_explicit_capability() {
     for scope in [None, Some("session"), Some(""), Some("workspace")] {
         let mut summary = plugin("user");

@@ -212,6 +212,7 @@ async fn test_agent_event_unknown_variant_dropped() {
 }
 
 #[tokio::test]
+#[serial]
 async fn test_goal_snapshot_forwards_to_session_owned_bridge() {
     crate::kit::atoms::init_atoms();
     *crate::kit::atoms::GOAL_SNAPSHOT.state().write() = None;

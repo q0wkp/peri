@@ -160,6 +160,7 @@ fn detail_scroll_does_not_touch_window_viewport_atom() {
 }
 
 #[test]
+#[serial_test::serial]
 fn open_close_detail_uses_window_descriptor_and_keeps_slot_state() {
     crate::kit::atoms::init_atoms();
     let mut window = crate::kit::history_window::HistoryWindow::new(

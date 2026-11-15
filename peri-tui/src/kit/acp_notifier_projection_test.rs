@@ -224,6 +224,7 @@ async fn test_usage_update_decodes_root_cache_sample_without_per_step_notificati
 }
 
 #[tokio::test]
+#[serial]
 async fn test_usage_update_ignores_auxiliary_and_preserves_explicit_zero_cache_read() {
     let (dummy_tx, _dummy_rx) = tokio::sync::mpsc::channel(4);
     let payload = |usage_meta: serde_json::Value, params_meta: serde_json::Value| {
