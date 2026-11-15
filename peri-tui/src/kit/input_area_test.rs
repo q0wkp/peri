@@ -703,6 +703,29 @@ fn test_slash_on_select_ui_prefix_opens_model_panel() {
     assert_eq!(*ACTIVE_PANEL.state().read(), Some(PanelKind::Model));
 }
 
+/// 选中 exit / quit（ui 域）→ 清空输入框并置 EXIT_REQUESTED（复用既有退出
+/// 路径，由 app_shell effect 调 exit_fn），不回退 apply_slash_selection。
+#[test]
+#[serial]
+fn test_slash_on_select_exit_requests_app_exit() {
+    crate::kit::atoms::init_atoms();
+    reset_submit_side_effect_state();
+    for label in ["exit", "quit"] {
+        *crate::kit::atoms::EXIT_REQUESTED.state().write() = false;
+        let mut s = TextAreaState::default();
+        s.insert_str("/e");
+        s.cursor = 2;
+        let item = slash_item(label, "ui:exit");
+        handle_slash_selection(&mut s, &item);
+        assert!(s.text.is_empty(), "命中 ui 域命令后输入框必须清空");
+        assert!(
+            *crate::kit::atoms::EXIT_REQUESTED.state().read(),
+            "{label} 选中后必须请求退出"
+        );
+    }
+    *crate::kit::atoms::EXIT_REQUESTED.state().write() = false;
+}
+
 /// 选中 setup（ui 域）→ 本地激活 Setup Wizard（不发 ACP）。
 #[test]
 #[serial]

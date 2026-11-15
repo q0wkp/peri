@@ -4,8 +4,8 @@ use parking_lot::RwLock;
 
 use crate::components::textarea::TextAreaState;
 use crate::kit::atoms::{
-    AT_MENTION_ACTIVE, AVAILABLE_SLASH_COMMANDS, FILE_LIST, MENTION_PREFIX, MENTION_SELECTED_INDEX,
-    SLASH_HINT_ACTIVE, SLASH_PREFIX, SLASH_SELECTED_INDEX, WIZARD_ACTIVE,
+    AT_MENTION_ACTIVE, AVAILABLE_SLASH_COMMANDS, EXIT_REQUESTED, FILE_LIST, MENTION_PREFIX,
+    MENTION_SELECTED_INDEX, SLASH_HINT_ACTIVE, SLASH_PREFIX, SLASH_SELECTED_INDEX, WIZARD_ACTIVE,
 };
 use crate::kit::panel_registry::open_panel;
 use crate::kit::slash_completion::{SlashActionKind, SlashCompletionItem};
@@ -54,7 +54,7 @@ pub(super) fn apply_slash_selection(state: &mut TextAreaState, cmd: &str) {
 
 /// Phase 4 步骤 4：补全选中行为收敛——统一先 `resolve_ui_command`（ui 域
 /// 本地拦截：裸名 / `ui:` 前缀 / aliases 归一化）。命中（如裸名 `history`
-/// → ThreadBrowser、`setup` → Wizard）→ 清空输入框并本地执行（不发 ACP）；
+/// → ThreadBrowser、`setup` → Wizard、`exit` → 退出）→ 清空输入框并本地执行（不发 ACP）；
 /// 未命中 → `apply_slash_selection` 落输入框（display 即 lexical，解析器
 /// 严格命中）。
 pub(super) fn handle_slash_selection(editor: &mut TextAreaState, item: &SlashCompletionItem) {
@@ -68,6 +68,11 @@ pub(super) fn handle_slash_selection(editor: &mut TextAreaState, item: &SlashCom
             editor.text.clear();
             editor.cursor = 0;
             *WIZARD_ACTIVE.state().write() = true;
+        }
+        Some(UiCommandAction::Exit) => {
+            editor.text.clear();
+            editor.cursor = 0;
+            *EXIT_REQUESTED.state().write() = true;
         }
         None => apply_slash_selection(editor, &item.insert_text),
     }

@@ -6,7 +6,9 @@ use crate::kit::acp_types::AcpEventWithEpoch;
 use crate::kit::atoms::{ACP_STATE, INPUT_BUFFER, LOCAL_EVENT_TX, SUBMIT_TX, WIZARD_ACTIVE};
 use crate::kit::input_history::{push_history, reset_history_cursor};
 use crate::kit::panel_registry::open_panel;
-use crate::kit::submit_request::{SessionControlRequest, SubmitRequest, parse_submit_request};
+use crate::kit::submit_request::{
+    SessionControlRequest, SubmitRequest, ViewActionRequest, is_exit_request, parse_submit_request,
+};
 
 /// 取出待发送附件。附件只在「确定要提交 agent 文本」时消费——控制类请求
 /// （`/clear` 等）不碰 `PENDING_ATTACHMENTS`，图片保留在 composer 供下次提交。
@@ -104,7 +106,9 @@ pub(super) fn dispatch_submit_request<F>(
         request @ (SubmitRequest::SessionControl(_)
         | SubmitRequest::ViewAction(_)
         | SubmitRequest::KeepGoing) => {
-            if is_loading {
+            // 退出不是消息：运行中也必须能走，否则只能先取消再双击 Ctrl+C。
+            let is_exit = matches!(request, SubmitRequest::ViewAction(ViewActionRequest::Exit));
+            if is_loading && !is_exit {
                 show_submit_blocked_notification(&request);
             } else {
                 send_request(request);
@@ -123,9 +127,11 @@ pub(super) fn dispatch_submit_request<F>(
 pub(super) fn commit_input(state: State<TextAreaState>) {
     super::exit_entry_focus_on_edit();
     let mut s = state.write();
+    // `exit` 注册为 ui 命令后会命中 is_remote_command，这里显式放行退出。
     if crate::kit::steer_state::is_enabled()
         && crate::kit::atoms::ACP_STATE.state().read().is_loading
         && is_remote_command(&s.text)
+        && !is_exit_request(&s.text)
     {
         show_submit_blocked_notification(&crate::kit::submit_request::SubmitRequest::AgentText {
             text: s.text.clone(),
