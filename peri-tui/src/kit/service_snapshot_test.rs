@@ -10,6 +10,7 @@ use crate::kit::atoms::{
     ThreadSummary,
 };
 use crate::kit::service_snapshot::file_scan::scan_cwd_files_shallow;
+use crate::kit::test_support::AtomsGuard;
 use chrono::Utc;
 use peri_acp::transport::{AcpTransport, mpsc::mpsc_transport_pair, types::IncomingMessage};
 use peri_acp_types::permission::{PermissionMode, SharedPermissionMode};
@@ -27,6 +28,32 @@ fn reset_snapshot_atoms() {
     THREAD_LIST_ERROR.set(None);
     THREAD_LIST.state().write().clear();
     SERVICE_PROJECTION_ERROR.set(None);
+}
+
+/// 恢复投影提交写入、读取的全局 atom（`commit_projection` 的输出与身份输入）。
+/// 用例开头安装，断言 panic 也恢复；前提值与 `reset_snapshot_atoms()` 一致。
+fn restore_snapshot_atoms() -> AtomsGuard {
+    use crate::kit::atoms as a;
+    AtomsGuard::new()
+        .take(&a::ACTIVE_EXECUTION_CWD)
+        .take(&a::ACTIVE_SESSION_ID)
+        .replace(&a::THREAD_BROWSER_SCOPE, ThreadBrowserScope::Project)
+        .take(&a::THREAD_BROWSER_ARCHIVED)
+        .replace(&a::THREAD_LIST_PAGE_COUNT, 1)
+        .replace(&a::BRIDGE_RESET_COUNTER, a::BRIDGE_RESET_COUNTER.get())
+        .take(&a::SERVICE_SNAPSHOT)
+        .take(&a::SERVICE_PROJECTION_ERROR)
+        .take(&a::THREAD_LIST_ERROR)
+        .take(&a::THREAD_LIST_HAS_MORE)
+        .take(&a::THREAD_LIST)
+        .take(&a::CURRENT_SESSION_TITLE)
+        .take(&a::CRON_JOBS)
+        .take(&a::FILE_LIST)
+        .take(&a::HOOK_LIST)
+        .take(&a::PLUGIN_LIST)
+        .take(&a::PROVIDER_LIST)
+        .take(&a::MCP_SERVERS)
+        .take(&a::MEMORY_LIST)
 }
 
 fn isolated_refresh() -> SlowSnapshotRefresh {
@@ -104,6 +131,7 @@ async fn snapshot_client(cwd: &str) -> (AcpTuiClient, tokio::sync::mpsc::Unbound
 #[tokio::test]
 #[serial]
 async fn project_history_uses_host_scope_and_actual_execution_path() {
+    let _atoms = restore_snapshot_atoms();
     reset_snapshot_atoms();
     let tmp = tempfile::tempdir().unwrap();
     let cwd = tmp.path().to_str().unwrap();
@@ -140,6 +168,7 @@ async fn project_history_uses_host_scope_and_actual_execution_path() {
 #[tokio::test]
 #[serial]
 async fn active_execution_directory_invalidates_file_cache_and_updates_title() {
+    let _atoms = restore_snapshot_atoms();
     reset_snapshot_atoms();
     let original = tempfile::tempdir().unwrap();
     let target = tempfile::tempdir().unwrap();
@@ -177,6 +206,7 @@ async fn active_execution_directory_invalidates_file_cache_and_updates_title() {
 #[tokio::test]
 #[serial]
 async fn closing_session_clears_session_projection_on_next_commit() {
+    let _atoms = restore_snapshot_atoms();
     reset_snapshot_atoms();
     let directory = tempfile::tempdir().unwrap();
     let (client, _queries) = snapshot_client(directory.path().to_str().unwrap()).await;
@@ -206,6 +236,7 @@ async fn closing_session_clears_session_projection_on_next_commit() {
 #[tokio::test]
 #[serial]
 async fn missing_workspace_capability_is_visible_as_query_error() {
+    let _atoms = restore_snapshot_atoms();
     reset_snapshot_atoms();
     let (transport, _server) = mpsc_transport_pair();
     let (client, _, _) = AcpTuiClient::new(transport);
@@ -244,6 +275,7 @@ fn make_minimal_source(client: Option<AcpTuiClient>) -> SnapshotSource {
 #[tokio::test]
 #[serial]
 async fn test_tick_once_writes_atoms() {
+    let _atoms = restore_snapshot_atoms();
     // 先 init atoms（避免 SERVICE_SNAPSHOT.get() 返回 None）
     reset_snapshot_atoms();
 
@@ -265,6 +297,7 @@ async fn test_tick_once_writes_atoms() {
 #[tokio::test]
 #[serial]
 async fn test_tick_once_empty_thread_list() {
+    let _atoms = restore_snapshot_atoms();
     reset_snapshot_atoms();
 
     let src = make_minimal_source(None);
@@ -280,6 +313,7 @@ async fn test_tick_once_empty_thread_list() {
 #[tokio::test]
 #[serial]
 async fn no_session_projection_preserves_only_labeled_startup_plugins_and_hooks() {
+    let _atoms = restore_snapshot_atoms();
     reset_snapshot_atoms();
     let mut source = make_minimal_source(None);
     source.hooks.push(HookSummary {
@@ -307,6 +341,7 @@ async fn no_session_projection_preserves_only_labeled_startup_plugins_and_hooks(
 #[tokio::test]
 #[serial]
 async fn test_cron_tasks_collected() {
+    let _atoms = restore_snapshot_atoms();
     reset_snapshot_atoms();
 
     let tmp = tempfile::tempdir().unwrap();

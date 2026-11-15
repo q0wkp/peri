@@ -1,6 +1,7 @@
 use super::super::current_scope;
 use super::*;
 use crate::kit::atoms::{ACTIVE_SESSION_ID, BRIDGE_RESET_COUNTER};
+use crate::kit::test_support::AtomsGuard;
 use peri_acp::transport::{
     AcpTransport,
     mpsc::mpsc_transport_pair,
@@ -11,14 +12,22 @@ use ratatui_kit::crossterm::event::{
 };
 use serial_test::serial;
 
-struct SessionGuard(String, u64);
+struct SessionGuard {
+    session: String,
+    reset: u64,
+    // 弹窗占前景时 handler 让路返回 Ignored；投影错误会盖过面板自己的提示文案。
+    _atoms: AtomsGuard,
+}
 
 impl SessionGuard {
     fn new() -> Self {
-        let guard = Self(
-            ACTIVE_SESSION_ID.state().read().clone(),
-            BRIDGE_RESET_COUNTER.get(),
-        );
+        let guard = Self {
+            session: ACTIVE_SESSION_ID.state().read().clone(),
+            reset: BRIDGE_RESET_COUNTER.get(),
+            _atoms: AtomsGuard::new()
+                .take(&crate::kit::atoms::POPUP_KIND)
+                .take(&crate::kit::atoms::SERVICE_PROJECTION_ERROR),
+        };
         *ACTIVE_SESSION_ID.state().write() = "plugin-operation-session".into();
         guard
     }
@@ -26,8 +35,8 @@ impl SessionGuard {
 
 impl Drop for SessionGuard {
     fn drop(&mut self) {
-        *ACTIVE_SESSION_ID.state().write() = self.0.clone();
-        BRIDGE_RESET_COUNTER.set(self.1);
+        *ACTIVE_SESSION_ID.state().write() = self.session.clone();
+        BRIDGE_RESET_COUNTER.set(self.reset);
     }
 }
 

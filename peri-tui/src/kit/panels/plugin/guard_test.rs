@@ -1,5 +1,6 @@
 //! 身份与作用域回归：复用真实挂载，接缝仅截取请求，避免全局 ACP OnceLock 干扰。
 use super::*;
+use crate::kit::test_support::AtomsGuard;
 use operation::{OperationState, PluginOperation, tests::mount_panel};
 use ratatui_kit::crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use serial_test::serial;
@@ -24,6 +25,8 @@ struct Guard {
     plugins: Vec<PluginSummary>,
     session: String,
     reset: u64,
+    // 弹窗占前景时 handler 让路返回 Ignored；投影错误会盖过面板自己的提示文案。
+    _atoms: AtomsGuard,
 }
 
 impl Guard {
@@ -33,6 +36,9 @@ impl Guard {
             plugins: PLUGIN_LIST.state().read().clone(),
             session: ACTIVE_SESSION_ID.state().read().clone(),
             reset: BRIDGE_RESET_COUNTER.get(),
+            _atoms: AtomsGuard::new()
+                .take(&crate::kit::atoms::POPUP_KIND)
+                .take(&crate::kit::atoms::SERVICE_PROJECTION_ERROR),
         }
     }
 
