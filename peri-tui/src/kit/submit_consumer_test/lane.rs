@@ -89,6 +89,7 @@ async fn test_submit_lanes_run_sessions_independently() {
 /// [回归 review #359] load 已 commit Stable、预约尚未释放时入队的输入，
 /// 必须与既有队列共用同一条车道，不能预测 generation+1 另起 Session 车道。
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial_test::serial]
 async fn test_load_commit_window_stable_input_keeps_existing_lane() {
     let (client, server) = make_client_without_pump();
     client.force_stable_for_test("session-a", false);

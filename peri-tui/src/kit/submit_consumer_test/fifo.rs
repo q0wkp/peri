@@ -14,6 +14,7 @@ use std::time::Duration;
 /// 用多线程 runtime：真实 TUI 是多线程，spawn 的每条提交会被不同 worker
 /// 取走，单线程 runtime 掩盖了并发提交的乱序窗口。
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial]
 async fn test_drained_input_buffer_prompts_preserve_fifo() {
     let (client, server) = make_client_without_pump();
     client.force_stable_for_test("fifo-session", false);
@@ -97,6 +98,7 @@ async fn test_failed_prompt_does_not_block_following_prompts() {
 
 /// [回归 #210] 第一条 prompt 未返回时，同会话第二条不得越过它提交。
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial]
 async fn test_pending_prompt_blocks_same_session_successor() {
     let (client, server) = make_client_without_pump();
     client.force_stable_for_test("fifo-session", false);
@@ -136,6 +138,7 @@ async fn test_pending_prompt_blocks_same_session_successor() {
 
 /// [回归 #210] 旧会话的 prompt 未返回时，新会话的提交不得被拖住。
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial]
 async fn test_pending_prompt_does_not_block_another_session() {
     let (client, server) = make_client_without_pump();
     client.force_stable_for_test("session-a", false);
