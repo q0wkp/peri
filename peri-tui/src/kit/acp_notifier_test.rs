@@ -1,6 +1,7 @@
 use super::*;
 use serde_json::json;
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_history_committed_notification_forwards_typed_event() {
     use peri_acp_types::history_window::HistoryCommittedTail;
     use peri_acp_types::messages::MessageId;
@@ -72,6 +73,7 @@ async fn assert_notifier_reached_barrier(
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_session_update_agent_message_chunk_to_text_chunk() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -103,6 +105,7 @@ async fn test_session_update_agent_message_chunk_to_text_chunk() {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn interleaved_sessions_keep_stream_identity_and_payload_together() {
     let (notifications, mut events, shutdown) = spawn_test_notifier();
     let inputs = [
@@ -141,6 +144,7 @@ async fn interleaved_sessions_keep_stream_identity_and_payload_together() {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_session_update_agent_thought_chunk() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -171,6 +175,7 @@ async fn test_session_update_agent_thought_chunk() {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_session_update_tool_call_to_tool_started() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -214,6 +219,7 @@ async fn test_session_update_tool_call_to_tool_started() {
 /// 服务端经 ACP `_meta.peri.originMessageId` 给出真实所属 assistant 消息：
 /// notifier 必须解析并带到事件上（纯工具轮次没有 chunk 可推断归属）。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_session_update_tool_call_reads_origin_message_id_from_meta() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -263,6 +269,7 @@ async fn test_session_update_tool_call_reads_origin_message_id_from_meta() {
 /// 嵌套执行经 `_meta.peri.originReadable=false` 显式声明没有可回读 origin：
 /// notifier 必须保留 `Some(false)`，不得降级成「未知」而触发启发式回退。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_session_update_tool_call_reads_unreadable_origin_from_meta() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -305,6 +312,7 @@ async fn test_session_update_tool_call_reads_unreadable_origin_from_meta() {
 /// 验证 tool_call_update 的顶层 flatten 格式（ACP SDK 实际序列化格式）：
 /// rawOutput/status 被 #[serde(flatten)] 合并到 update 顶层。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_session_update_tool_call_update_flattened_format() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -340,6 +348,7 @@ async fn test_session_update_tool_call_update_flattened_format() {
 /// 验证 tool_call_update 的 fields 嵌套格式（fallback 兼容路径）：
 /// rawOutput/status 在 fields 子对象内。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_session_update_tool_call_update_nested_fields_fallback() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -375,6 +384,7 @@ async fn test_session_update_tool_call_update_nested_fields_fallback() {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_session_replay_agent_message_chunk_to_committed_assistant_text() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -409,6 +419,7 @@ async fn test_session_replay_agent_message_chunk_to_committed_assistant_text() {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_unstable_event_unknown_dropped() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -427,6 +438,7 @@ async fn test_unstable_event_unknown_dropped() {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_session_replay_tool_call_retains_raw_input_for_semantic_card() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
     let raw_input = json!({"skill": "using-superpowers"});
@@ -458,6 +470,7 @@ async fn test_session_replay_tool_call_retains_raw_input_for_semantic_card() {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_non_terminal_tool_update_is_not_forwarded_as_tool_end() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
     notif_tx
@@ -483,6 +496,7 @@ async fn test_non_terminal_tool_update_is_not_forwarded_as_tool_end() {
 /// 必须先于内容事件注入 `ReplayEntryMarked`——首屏「自有条目只有 reminder」时，
 /// 这是区间索引的唯一来源（缺了它更早历史会越过继承前缀）。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_unstable_event_reminder_entry_marks_precede_content() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
     notif_tx

@@ -145,6 +145,7 @@ fn detail_failure_is_explicit_and_keeps_no_silent_empty_body() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn detail_scroll_does_not_touch_window_viewport_atom() {
     crate::kit::atoms::init_atoms();
     let before = crate::kit::atoms::WINDOW_VIEWPORT.state().read().clone();

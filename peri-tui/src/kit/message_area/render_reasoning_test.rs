@@ -5,6 +5,7 @@ use crate::kit::message_area::grid::TextLineSource;
 
 /// Running：`│ Thinking…` + elapsed + ≤4 行 tail；空 reasoning 仍出 header。
 #[test]
+#[serial_test::parallel]
 fn test_reasoning_running_header_elapsed_tail() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -77,6 +78,7 @@ fn test_reasoning_running_header_elapsed_tail() {
 
 /// Completed/Collapsed：单行 `│ Thought for 12s · 14 lines`（icon 统一竖线）。
 #[test]
+#[serial_test::parallel]
 fn test_reasoning_completed_single_line() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -110,6 +112,7 @@ fn test_reasoning_completed_single_line() {
 
 /// Completed/Expanded：`│` header + muted+italic 正文（无 italic → dim）。
 #[test]
+#[serial_test::parallel]
 fn test_reasoning_expanded_body_style() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -145,6 +148,7 @@ fn test_reasoning_expanded_body_style() {
 /// Completed + duration_ms = None（历史恢复路径 `handle_committed_assistant_text`，
 /// 推理时长不可得）：摘要省略时长只显示行数——不渲染「思考了 0 秒」噪音。
 #[test]
+#[serial_test::parallel]
 fn test_reasoning_completed_no_duration_omits_seconds() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -183,6 +187,7 @@ fn test_reasoning_completed_no_duration_omits_seconds() {
 /// （│ Thinking…），不渲染 tail——「隐藏 reasoning 只影响 body；活动状态行
 /// 仍需可见」；Space 切换必须有视觉反馈（review F5）。
 #[test]
+#[serial_test::parallel]
 fn test_reasoning_running_collapsed_shows_status_line_only() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -223,6 +228,7 @@ fn test_reasoning_running_collapsed_shows_status_line_only() {
 /// completed 只定义 Collapsed）：映射为单行折叠视觉（无正文即单行；正文只在
 /// Expanded 渲染），icon 统一竖线。
 #[test]
+#[serial_test::parallel]
 fn test_reasoning_completed_preview_maps_to_collapsed_symbol() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -257,6 +263,7 @@ fn test_reasoning_completed_preview_maps_to_collapsed_symbol() {
 /// reasoning Preview tail 高度有界且不折行——wrap 后取最后 ≤4 视觉行（显示尾部
 /// 而非逐行 truncate 头部），每条 tail ≤ content_width → 恰好 1 个 visual row。
 #[test]
+#[serial_test::parallel]
 fn test_reasoning_preview_tail_wrap_height_stable() {
     let long_line = "a".repeat(400);
     let reasoning = TuiReasoningBlock {
@@ -331,6 +338,7 @@ fn test_reasoning_preview_tail_wrap_height_stable() {
 /// 长单行 wrap 后 tail 显示**尾部**内容（TAIL 可见、HEAD 不可见）——展示的是
 /// 最近视觉行而非 truncate 头部（§6.3）。
 #[test]
+#[serial_test::parallel]
 fn test_reasoning_preview_tail_shows_end_of_long_line() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -379,6 +387,7 @@ fn test_reasoning_preview_tail_shows_end_of_long_line() {
 /// 4→5 视觉行跨越后块高恒定 `1 + min(n, 4)`——流式增长不再引起高度跳动（§6.3）。
 /// 行宽按过程区正文预算（§8：`content - indent`）折算视觉行数。
 #[test]
+#[serial_test::parallel]
 fn test_reasoning_height_stable_across_4_to_5_visual_lines() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -414,6 +423,7 @@ fn test_reasoning_height_stable_across_4_to_5_visual_lines() {
 
 /// 摘要 N = 视觉行总数，与 Expanded 展开行数一致（N 不封顶，正文才 cap 100）。
 #[test]
+#[serial_test::parallel]
 fn test_reasoning_summary_n_equals_expanded_visual_rows() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -495,6 +505,7 @@ fn test_reasoning_summary_n_equals_expanded_visual_rows() {
 
 /// 空行过滤三消费方一致：中间空行删除、尾部空行不占 tail 槽位（§1/§2 边界语义）。
 #[test]
+#[serial_test::parallel]
 fn test_reasoning_empty_lines_skipped_consistently() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -620,6 +631,7 @@ fn test_reasoning_empty_lines_skipped_consistently() {
 /// §6.3 空 reasoning 占位：running 空块渲染 `│ Thinking…` + elapsed，
 /// 无正文时只有 header 行（不出现空白 block）；completed 折叠为单行。
 #[test]
+#[serial_test::parallel]
 fn test_empty_reasoning_placeholder_running_and_completed() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -693,6 +705,7 @@ fn test_empty_reasoning_placeholder_running_and_completed() {
 /// §6.2 完成时长三档（G-Tokens 仅 duration）：Wide 右对齐 / Standard 紧跟 /
 /// Compact 隐藏。
 #[test]
+#[serial_test::parallel]
 fn test_assistant_duration_meta_three_breakpoints() {
     crate::i18n::init(Some("en"));
     let mk = |term: u16| {
@@ -750,6 +763,7 @@ fn test_assistant_duration_meta_three_breakpoints() {
 /// §6/§7 气泡内混排：reasoning 段走过程区（首行/续行同列），长正文段回基准列；
 /// 入口台阶由渲染层插入 entry 行首，reasoning → 正文的退出台阶由 entry 自画。
 #[test]
+#[serial_test::parallel]
 fn test_bubble_reasoning_uses_process_zone_body_returns_to_baseline() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);

@@ -8,6 +8,7 @@ use super::*;
 /// turn 内 tool 过程 entry 无空行；
 /// 空文本 user（thinking 回传建模）渲染 0 行。
 #[test]
+#[serial_test::parallel]
 fn test_vertical_rhythm_blank_lines() {
     let grid = GridSpec::grid_for(80);
 
@@ -139,6 +140,7 @@ fn test_vertical_rhythm_blank_lines() {
 
 /// 连续 tool 卡片保持紧凑：前一张卡片末尾和后一张卡片开头都不是空行。
 #[test]
+#[serial_test::parallel]
 fn test_consecutive_tool_cards_have_no_gap() {
     let grid = GridSpec::grid_for(80);
     let first = vm_to_lines(
@@ -157,6 +159,7 @@ fn test_consecutive_tool_cards_have_no_gap() {
 /// 空文本 user（rewind/重放路径的 thinking 回传消息建模为 user role）→ 渲染
 /// 0 行——不产生 turn 节拍空行，thinking 底下不出现悬空空行。
 #[test]
+#[serial_test::parallel]
 fn test_empty_user_bubble_renders_zero_lines() {
     let grid = GridSpec::grid_for(80);
     let empty_user = TuiRenderUnit::TuiUserBubble(crate::kit::tui_render_unit::TuiUserBubble::new(

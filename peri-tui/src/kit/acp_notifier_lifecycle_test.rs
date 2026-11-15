@@ -19,6 +19,7 @@ fn spawn_test_notifier() -> (
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn bridge_delivery_failure_claims_and_settles_registered_interaction() {
     let (client_transport, server_transport) = mpsc_transport_pair();
     let (client, notification_tx, notification_rx) = AcpTuiClient::new(client_transport);
@@ -51,6 +52,7 @@ async fn bridge_delivery_failure_claims_and_settles_registered_interaction() {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_agent_done_forwards_turn_done_to_bridges() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -72,6 +74,7 @@ async fn test_agent_done_forwards_turn_done_to_bridges() {
 /// Issue 2026-08-05 返工：AgentDone(cancelled) 应透传 request_id 到
 /// TurnInterrupted，供 bridge 的 stale 配对判定。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_agent_done_cancelled_forwards_request_id_to_turn_interrupted() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 

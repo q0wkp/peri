@@ -52,6 +52,7 @@ async fn test_request_permission_forwards_hitl_pending_event() {
 
 /// [回归测试] Number(7) 与 String("7") 必须保留 variant，且连续通知保持 FIFO。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_request_permission_queued_events_keep_number_and_string_ids_atomic() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
     for (id, title) in [
@@ -95,6 +96,7 @@ async fn test_request_permission_queued_events_keep_number_and_string_ids_atomic
 
 /// [回归测试] Elicitation 的 Number/String RequestId 与问题 payload 保持 FIFO 同行。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_elicitation_queued_events_keep_number_and_string_ids_atomic() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
     for (id, question_id) in [

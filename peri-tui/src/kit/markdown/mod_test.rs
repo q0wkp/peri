@@ -22,6 +22,7 @@ fn test_empty_input() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_heading() {
     let result = flatten(&parse_markdown(
         "# Hello",
@@ -132,6 +133,7 @@ fn test_unordered_list() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_code_block_background_fills_each_visual_line() {
     let width = 12;
     let result = flatten(&parse_markdown(
@@ -159,6 +161,7 @@ fn test_code_block_background_fills_each_visual_line() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_code_block_spacing() {
     let result = flatten(&parse_markdown(
         "text\n\n```rust\nlet x = 1;\n```",
@@ -202,6 +205,7 @@ fn test_bold_text() {
 // ── 未闭合 code block 修复（步骤 1）──
 
 #[test]
+#[serial_test::parallel]
 fn test_unclosed_code_block_content_visible() {
     // [回归测试] 流式输入末尾若 ``` 未闭合，内容不应被丢弃
     let input = "```rust\nlet x = 1;\nlet y = 2;";
@@ -222,6 +226,7 @@ fn test_unclosed_code_block_content_visible() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_closed_code_block_unchanged_after_fix() {
     // 闭合的代码块渲染结果稳定（验证修复不引入回归）
     let input = "```rust\nlet x = 1;\n```";

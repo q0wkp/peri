@@ -16,6 +16,7 @@ fn bound_lifecycle() -> InteractionLifecycle {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_external_execution_stop_does_not_target_user_input_ticket() {
     let (transport, server) = mpsc_transport_pair();
     let (client, tx, mut rx) = AcpTuiClient::new_interactive(transport);
@@ -48,6 +49,7 @@ async fn test_external_execution_stop_does_not_target_user_input_ticket() {
 
 /// [回归测试] 内部执行开始不得绕过 generation、retired request 或选中会话边界。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_execution_started_rejects_duplicate_generation_and_switched_session() {
     let (transport, server) = mpsc_transport_pair();
     let (client, tx, mut rx) = AcpTuiClient::new_interactive(transport);
@@ -132,6 +134,7 @@ async fn test_execution_started_rejects_duplicate_generation_and_switched_sessio
 
 /// [回归测试] snapshot 尚未经 pump 到达时，真实执行开始本身即可首次绑定 generation。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_execution_started_before_initial_snapshot_opens_lease() {
     let (transport, server) = mpsc_transport_pair();
     let (client, tx, mut rx) = AcpTuiClient::new_interactive(transport);
@@ -170,6 +173,7 @@ async fn test_execution_started_before_initial_snapshot_opens_lease() {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_execution_started_opens_first_permission_and_ask_until_matching_done() {
     let (transport, server) = mpsc_transport_pair();
     let (client, tx, mut rx) = AcpTuiClient::new_interactive(transport);
@@ -297,6 +301,7 @@ async fn test_execution_started_opens_first_permission_and_ask_until_matching_do
 
 /// [回归测试] 快照先恢复 B 时，阻塞在 operation gate 后的 A done 不能重置 B。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_user_input_run_snapshot_before_old_done_keeps_new_run_active() {
     let (transport, server) = mpsc_transport_pair();
     let (client, tx, mut rx) = AcpTuiClient::new_interactive(transport);

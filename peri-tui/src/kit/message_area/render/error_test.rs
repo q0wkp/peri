@@ -91,6 +91,7 @@ fn error_preview_handles_zero_width_and_empty_text() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn system_error_icon_is_a_copy_target_even_on_narrow_terminals() {
     let text = "HTTP 400: ".to_owned() + &"long 中文 response ".repeat(100);
     let vm = note(&text, TuiNoteLevel::Error);
@@ -136,6 +137,7 @@ fn system_error_icon_is_a_copy_target_even_on_narrow_terminals() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn warning_and_info_notes_are_not_copy_targets() {
     for level in [TuiNoteLevel::Warning, TuiNoteLevel::Info] {
         let vm = note("not an error", level);
@@ -150,6 +152,7 @@ fn warning_and_info_notes_are_not_copy_targets() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn tool_error_preview_is_three_rows_and_copy_is_not_clipped() {
     let text = "first line\n".to_owned() + &"detailed error ".repeat(50);
     let vm = tool(&text);
@@ -160,6 +163,7 @@ fn tool_error_preview_is_three_rows_and_copy_is_not_clipped() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn subagent_error_icons_copy_their_own_complete_error() {
     let first = "older child error ".repeat(40);
     let second = "newer child error ".repeat(40);
@@ -196,6 +200,7 @@ fn subagent_fallback_keeps_the_entire_error_for_copy() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn successful_subagent_keeps_child_error_local_and_ignores_stale_parent_reason() {
     let mut vm = group(vec![tool("child error")], Some("stale parent reason"));
     if let TuiRenderUnit::TuiSubAgentGroup(data) = &mut vm {

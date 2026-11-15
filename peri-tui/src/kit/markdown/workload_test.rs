@@ -25,12 +25,14 @@ fn assert_streaming_matches_terminal(source: &str) {
 }
 
 #[test]
+#[serial_test::parallel]
 fn lat09_large_list_tail_skips_image_scan_and_matches_terminal() {
     let source = "- 工作项 **明确边界** 与 `代码`\n".repeat(1024);
     assert_streaming_matches_terminal(&source);
 }
 
 #[test]
+#[serial_test::parallel]
 fn lat09_large_table_tail_skips_image_scan_and_matches_terminal() {
     let source = format!(
         "| 名称 | 状态 |\n| --- | --- |\n{}",
@@ -40,12 +42,14 @@ fn lat09_large_table_tail_skips_image_scan_and_matches_terminal() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn lat09_unclosed_fence_tail_skips_image_scan_and_matches_terminal() {
     let source = format!("```rust\n{}", "let value = 42;\n".repeat(1024));
     assert_streaming_matches_terminal(&source);
 }
 
 #[test]
+#[serial_test::parallel]
 fn lat09_long_code_line_preserves_streaming_and_terminal_text() {
     let source = format!("```rust\n{}", "let 名称 = 42;".repeat(4096));
     assert_streaming_matches_terminal(&source);

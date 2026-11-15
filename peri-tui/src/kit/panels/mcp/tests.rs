@@ -121,6 +121,7 @@ fn oauth_start_failure_message_detects_conflict() {
 /// 鼠标命中的按钮行号必须与真实渲染出的按钮行一致：常量与渲染漂移时
 /// 点击会落到错误行。覆盖长错误（多行换行）、长 URL 与待授权的组合。
 #[test]
+#[serial_test::parallel]
 fn detail_button_row_matches_rendered_button_line() {
     let cases = [
         McpServerSummary::default(),
@@ -153,6 +154,7 @@ fn detail_button_row_matches_rendered_button_line() {
 
 /// 长错误按 DETAIL_WRAP_WIDTH 换行且内容完整（不丢字符、不截断）。
 #[test]
+#[serial_test::parallel]
 fn long_error_summary_wraps_and_stays_complete() {
     let error = format!(
         "connection refused: 127.0.0.1:8080 unreachable{}",
@@ -201,6 +203,7 @@ fn long_error_summary_wraps_and_stays_complete() {
 
 /// 复制按钮与标题同行（header 行）渲染，仅在错误摘要存在时出现。
 #[test]
+#[serial_test::parallel]
 fn header_copy_button_shares_title_row_and_hides_without_error() {
     let copy_label = i18n::tr("panel-mcp-detail-btn-copy");
     let copy_text = DetailAction::CopyError.text(&copy_label);
@@ -235,6 +238,7 @@ fn header_copy_button_shares_title_row_and_hides_without_error() {
 /// 复制按钮右对齐到内容右缘（预留滚动条列）；窄终端下标题截断但按钮仍渲染、
 /// 命中区间仍落在面板内。
 #[test]
+#[serial_test::parallel]
 fn header_copy_button_is_right_aligned_and_survives_narrow_width() {
     let summary = McpServerSummary {
         name: "very-long-server-name-for-narrow-terminal".into(),
@@ -285,6 +289,7 @@ fn header_copy_button_is_right_aligned_and_survives_narrow_width() {
 /// 按钮样式复用 chat 消息区按钮：复制 = md 复制按钮反色块；底行 = 选项/权限
 /// 按钮（选中态 bg(selection)+BOLD）。
 #[test]
+#[serial_test::parallel]
 fn detail_button_styles_match_chat_buttons() {
     let theme = peri_theme::builtin::dark_theme();
     let semantic = &theme.semantic;
@@ -330,6 +335,7 @@ fn detail_button_styles_match_chat_buttons() {
 
 /// 按钮列偏移必须与渲染位置一致（鼠标按列命中的依据；CJK label 双宽）。
 #[test]
+#[serial_test::parallel]
 fn detail_button_columns_match_rendered_lines() {
     let summary = McpServerSummary {
         error_summary: Some("boom".into()),
@@ -421,6 +427,7 @@ fn detail_copy_text_keeps_raw_error_summary() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn detail_lines_render_protocol_version() {
     let summary = McpServerSummary {
         name: "docs".into(),
@@ -437,6 +444,7 @@ fn detail_lines_render_protocol_version() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn detail_lines_protocol_falls_back_when_unnegotiated() {
     let label = i18n::tr("panel-mcp-detail-protocol");
     let placeholder = i18n::tr("ui-empty");

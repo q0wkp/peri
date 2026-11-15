@@ -524,6 +524,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[serial_test::parallel]
     fn todo_detail_respects_extremely_narrow_content_width() {
         let todo = TuiTodoPresentation {
             current_items: Vec::new(),

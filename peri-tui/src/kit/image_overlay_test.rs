@@ -483,6 +483,7 @@ fn ready_state(path: PathBuf) -> ImagePreviewState {
 }
 
 #[test]
+#[serial_test::parallel]
 fn draw_preview_overlay_ready_transmits() {
     crate::i18n::init(Some("en"));
     let mut term = Terminal::new(TestBackend::new(40, 20)).unwrap();
@@ -523,6 +524,7 @@ fn draw_preview_overlay_ready_transmits() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn draw_preview_overlay_degraded_no_escape() {
     crate::i18n::init(Some("en"));
     let mut term = Terminal::new(TestBackend::new(40, 20)).unwrap();
@@ -577,6 +579,7 @@ fn draw_preview_overlay_idle_empty() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn draw_preview_overlay_pixel_disabled_meta_only() {
     crate::i18n::init(Some("en"));
     let mut term = Terminal::new(TestBackend::new(40, 20)).unwrap();
@@ -606,6 +609,7 @@ fn draw_preview_overlay_pixel_disabled_meta_only() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn draw_preview_overlay_unsupported_protocol_degrades() {
     crate::i18n::init(Some("en"));
     let mut term = Terminal::new(TestBackend::new(40, 20)).unwrap();
@@ -624,6 +628,7 @@ fn draw_preview_overlay_unsupported_protocol_degrades() {
 /// [方案 B] 无协议终端：像素区显示终端能力提示（而非静默空白），
 /// 且不 transmit。同时覆盖 ITerm2 disabled（同分支，§6.3）。
 #[test]
+#[serial_test::parallel]
 fn draw_preview_overlay_no_protocol_shows_hint() {
     crate::i18n::init(Some("en"));
     for protocol in [GraphicsProtocol::None, GraphicsProtocol::ITerm2] {
@@ -732,6 +737,7 @@ fn decode_uses_validated_buffer_not_reopened_path() {
 /// F3 回归（§6.2-4）：overlay meta 行必须过 `sanitize_for_terminal`——文件名
 /// 含 ESC 等控制字符（macOS 允许）时，escape 不得随 meta 行进入终端 buffer。
 #[test]
+#[serial_test::parallel]
 fn preview_meta_line_sanitizes_control_chars() {
     crate::i18n::init(Some("en"));
     let mut term = Terminal::new(TestBackend::new(40, 20)).unwrap();

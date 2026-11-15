@@ -5,6 +5,7 @@ use serde_json::json;
 /// Issue 2026-08-05 返工链路测试：pump 解析 `peri/agent_event_done` 的
 /// requestId → `AgentDone.request_id`（服务器回带 → TUI stale 配对）。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_pump_parses_agent_event_done_request_id() {
     let (client_transport, server_transport) = mpsc_transport_pair();
     let (client, notification_tx, mut notification_rx) = AcpTuiClient::new(client_transport);
@@ -40,6 +41,7 @@ async fn test_pump_parses_agent_event_done_request_id() {
 /// 兼容性：requestId 缺失时 AgentDone.request_id 应为 None（continuation /
 /// Immediate 命令 / stdio 等路径）。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_pump_agent_event_done_without_request_id() {
     let (client_transport, server_transport) = mpsc_transport_pair();
     let (client, notification_tx, mut notification_rx) = AcpTuiClient::new(client_transport);
@@ -73,6 +75,7 @@ async fn test_pump_agent_event_done_without_request_id() {
 /// 复现"幽灵播放"场景：current_session_id=None（删除当前会话后）时，
 /// 黑名单中的会话事件必须被 drop——None 放行语义只服务于首次连接初始化。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_pump_drops_events_from_deleted_session_when_current_none() {
     let (client_transport, server_transport) = mpsc_transport_pair();
     let (client, notification_tx, mut notification_rx) = AcpTuiClient::new(client_transport);
@@ -112,6 +115,7 @@ async fn test_pump_drops_events_from_deleted_session_when_current_none() {
 
 /// 黑名单不误伤：current=None 时未删除会话的初始化通知仍正常放行。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_pump_still_forwards_init_notifications_when_current_none() {
     let (client_transport, server_transport) = mpsc_transport_pair();
     let (client, notification_tx, mut notification_rx) = AcpTuiClient::new(client_transport);
@@ -137,6 +141,7 @@ async fn test_pump_still_forwards_init_notifications_when_current_none() {
 /// delete_session 完整链路：服务端响应后，current 清空 + 黑名单记录，
 /// 该会话后续事件被过滤。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_delete_session_clears_current_and_blacklists() {
     let (client_transport, server_transport) = mpsc_transport_pair();
     let (client, notification_tx, mut notification_rx) = AcpTuiClient::new(client_transport);

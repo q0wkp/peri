@@ -72,6 +72,7 @@ fn rich_skills() -> Vec<SkillEntry> {
 
 /// 行数契约：四段全非空时 detail_btn_row 必须等于真实渲染的按钮行。
 #[test]
+#[serial_test::parallel]
 fn detail_tables_row_count_matches_rendered_lines() {
     let summary = rich_summary();
     let skills = rich_skills();
@@ -87,6 +88,7 @@ fn detail_tables_row_count_matches_rendered_lines() {
 
 /// 四个区块标题固定渲染；工具/技能/代理行与订阅开关同时可见。
 #[test]
+#[serial_test::parallel]
 fn detail_tables_render_sections_rows_and_subscriptions() {
     let summary = rich_summary();
     let skills = rich_skills();
@@ -150,6 +152,7 @@ fn detail_tables_render_sections_rows_and_subscriptions() {
 
 /// 空数据仍渲染四段（标题 + 四空格破折号占位），且表格行不越界。
 #[test]
+#[serial_test::parallel]
 fn detail_tables_render_empty_placeholders_and_fit_width() {
     let lines = detail_lines(&McpServerSummary::default(), 0);
     let text: Vec<String> = lines.iter().map(line_text).collect();
@@ -198,6 +201,7 @@ fn detail_tables_render_empty_placeholders_and_fit_width() {
 /// CJK/emoji 单元格按显示宽度截断补齐：所有表格行等宽、不越界，截断处有
 /// 省略号（不是按字符数截断）。
 #[test]
+#[serial_test::parallel]
 fn detail_tables_truncate_cjk_and_emoji_by_display_width() {
     let summary = McpServerSummary {
         tools_count: 1,
@@ -241,6 +245,7 @@ fn detail_tables_truncate_cjk_and_emoji_by_display_width() {
 /// 窄面板：表格总宽夹到可用宽度；低于最小可渲染宽度时退回占位行，按钮行号
 /// 与渲染同步收缩（宽度参与行数推导）。
 #[test]
+#[serial_test::parallel]
 fn detail_tables_fit_narrow_width_and_fall_back_to_placeholder() {
     let theme = peri_theme::builtin::dark_theme();
     let summary = rich_summary();

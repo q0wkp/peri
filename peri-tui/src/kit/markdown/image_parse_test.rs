@@ -125,6 +125,7 @@ fn test_cached_parse_image_in_list() {
 /// [P0-1 回归] 标题/列表项内图片：token 未还原时 NUL 宽度为 0，标题渲染为
 /// 空行、列表项只剩 `• `。修复后必须显示降级文案（span 层替换，不拆段）。
 #[test]
+#[serial_test::parallel]
 fn test_image_in_heading_and_list_item_renders_degraded_text() {
     let heading = parse_markdown("# ![a](u)", 80, Palette::default(), TEST_BASE_FG);
     let text = segments_to_text(&heading);
@@ -152,6 +153,7 @@ fn test_image_in_heading_and_list_item_renders_degraded_text() {
 /// 代码上下文内的 `![` 不识别为图片（S3 E1-E2）：字面保留、替换无操作，
 /// cached == full；代码块外的图片正常识别为 token。
 #[test]
+#[serial_test::parallel]
 fn test_cached_parse_image_in_code_block_not_detected() {
     let mut cache = MarkdownRenderCache::default();
 
@@ -351,6 +353,7 @@ fn test_cached_image_streaming_closure_yields_image_segment() {
 
 /// 代码块内 `![a](u)` → 原样文本，无 Image 段（S3 E1）。
 #[test]
+#[serial_test::parallel]
 fn test_image_inside_code_block_literal() {
     let segments = parse_markdown("```\n![a](u)\n```", 80, Palette::default(), TEST_BASE_FG);
     assert!(

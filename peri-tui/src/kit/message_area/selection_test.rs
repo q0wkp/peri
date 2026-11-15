@@ -479,6 +479,7 @@ fn sel_env(
 
 /// 完整行选区（中间行）→ 语义全文（无 chrome）。
 #[test]
+#[serial_test::parallel]
 fn test_extract_semantic_plain_middle_line() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -531,6 +532,7 @@ fn test_extract_semantic_plain_middle_line() {
 
 /// 跨行拖选：tool header 重建语义（label+summary）、`$ cmd` 保留。
 #[test]
+#[serial_test::parallel]
 fn test_extract_semantic_tool_card_header_and_command() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -584,6 +586,7 @@ fn test_extract_semantic_tool_card_header_and_command() {
 
 /// diff 行：行号 gutter 剥离、patch 标记保留（§9）。
 #[test]
+#[serial_test::parallel]
 fn test_extract_semantic_diff_strips_gutter_keeps_markers() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -646,6 +649,7 @@ fn test_extract_semantic_diff_strips_gutter_keeps_markers() {
 
 /// 部分行选择（选区从行中开始）：映射到语义文本（CJK 半字符边界兼容）。
 #[test]
+#[serial_test::parallel]
 fn test_extract_semantic_partial_row_maps_to_semantic() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -682,6 +686,7 @@ fn test_extract_semantic_partial_row_maps_to_semantic() {
 
 /// view_models=None 时保持既有行为（无剥离）——回归防线。
 #[test]
+#[serial_test::parallel]
 fn test_extract_without_view_models_keeps_plain() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);

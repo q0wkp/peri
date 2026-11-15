@@ -126,6 +126,7 @@ fn test_highlight_cache_byte_budget_evicts_and_rejects_oversized_results() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn lat09_oversized_code_skips_syntax_work_without_dropping_text() {
     let palette = ratatui_kit::prelude::Palette::default();
     let theme = MarkdownTheme::from_palette(&palette);

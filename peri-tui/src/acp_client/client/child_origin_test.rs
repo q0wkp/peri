@@ -48,6 +48,7 @@ async fn child_origin_survives_wire_pump_and_notifier_queues() {
 }
 
 #[tokio::test]
+#[serial_test::parallel]
 async fn malformed_child_origin_does_not_fall_back_to_unscoped_event() {
     let (transport, server) = mpsc_transport_pair();
     let (client, tx, mut rx) = AcpTuiClient::new_interactive(transport);

@@ -1,6 +1,7 @@
 use super::*;
 
 #[test]
+#[serial_test::parallel]
 fn terminal_cache_does_not_retain_source_or_streaming_blocks() {
     let source = "stable paragraph\n\n".repeat(256);
     let mut cache = MarkdownRenderCache::default();
@@ -16,6 +17,7 @@ fn terminal_cache_does_not_retain_source_or_streaming_blocks() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn clearing_source_resets_streaming_cache() {
     let mut cache = MarkdownRenderCache::default();
     parse_markdown_chunks_cached(
@@ -33,6 +35,7 @@ fn clearing_source_resets_streaming_cache() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn replacing_same_length_source_discards_stable_chunks() {
     let mut cache = MarkdownRenderCache::default();
     let first = parse_markdown_chunks_cached(
@@ -66,6 +69,7 @@ fn replacing_same_length_source_discards_stable_chunks() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn shortening_source_discards_removed_chunks() {
     let mut cache = MarkdownRenderCache::default();
     let first = parse_markdown_chunks_cached(
@@ -87,6 +91,7 @@ fn shortening_source_discards_removed_chunks() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn changing_body_foreground_rematerializes_stable_chunks() {
     let input = "stable paragraph\n\nmutable";
     let mut cache = MarkdownRenderCache::default();

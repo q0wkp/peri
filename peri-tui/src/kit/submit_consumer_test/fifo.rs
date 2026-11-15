@@ -52,6 +52,7 @@ async fn test_drained_input_buffer_prompts_preserve_fifo() {
 
 /// [回归 #210] 前一条 prompt RPC 失败不得吞掉后续消息。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_failed_prompt_does_not_block_following_prompts() {
     let (client, server) = make_client_without_pump();
     client.force_stable_for_test("fifo-session", false);

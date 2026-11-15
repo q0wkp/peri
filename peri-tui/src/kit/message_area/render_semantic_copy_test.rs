@@ -18,6 +18,7 @@ pub(super) fn sem_at(vm: &TuiRenderUnit, local_idx: usize, grid: &GridSpec) -> O
 /// 短回复并入过程带后剥过程区前缀（outer + indent 留空 + 标记 + gap）；两形态
 /// 语义一致：无符号无竖线。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_plain_lines_strip_prefix() {
     let grid = GridSpec::grid_for(120);
     // 短回复（<120 字）并入过程带；长回复追加第 3 段超阈值 → 留在文本区。
@@ -60,6 +61,7 @@ fn test_semantic_plain_lines_strip_prefix() {
 
 /// §6.1/§6.2 无 role label 行：`You` / `Perihelion` 不渲染，正文从第 1 行开始。
 #[test]
+#[serial_test::parallel]
 fn test_no_role_label_line_rendered() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -113,6 +115,7 @@ fn test_no_role_label_line_rendered() {
 /// §9.1 Edit/Write 头行只保留 diff 计数（`· +N −M`）——摘要文本含路径，
 /// 与 header 的 `input_summary` 重复，不再拼接。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_tool_header_edit_write_count_only() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -145,6 +148,7 @@ fn test_semantic_tool_header_edit_write_count_only() {
 
 /// tool header 行：`{Verb} {summary}{suffix}`（无符号、无 duration）。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_tool_header() {
     let grid = GridSpec::grid_for(120);
     // Read：label + path + `— N lines` 后缀
@@ -180,6 +184,7 @@ fn test_semantic_tool_header() {
 /// 无符号、无 duration、无缩进/竖线）；原因行 → 纯错误正文（剥缩进）；顶层
 /// 单行摘要（非 running）走默认剥离。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_subagent_tool_line() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(120);
@@ -243,6 +248,7 @@ fn test_semantic_subagent_tool_line() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_semantic_subagent_without_tools_copies_entry_and_error_reason() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -255,6 +261,7 @@ fn test_semantic_subagent_without_tools_copies_entry_and_error_reason() {
 
 /// Bash 展开 `$ cmd` 行保留 command（§9）。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_bash_command_line() {
     let grid = GridSpec::grid_for(120);
     let mut bash_expanded = tool_card("Bash", "cargo test --workspace", false, false);
@@ -273,6 +280,7 @@ fn test_semantic_bash_command_line() {
 
 /// diff 行：剥离行号 gutter，保留 `+`/`-` patch 标记（§9）。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_diff_lines_strip_gutter() {
     let grid = GridSpec::grid_for(120);
     let card = edit_card_with_diff(EDIT_DIFF);
@@ -304,6 +312,7 @@ fn test_semantic_diff_lines_strip_gutter() {
 
 /// 普通输出行以数字开头（如 Bash 输出 `42  foo`）不误判为 diff 行。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_output_line_not_mistaken_for_diff() {
     let grid = GridSpec::grid_for(120);
     let mut card = tool_card("Bash", "echo 42", false, false);
@@ -322,6 +331,7 @@ fn test_semantic_output_line_not_mistaken_for_diff() {
 
 /// code block 行：剥 `│ ` gutter 与视觉背景 padding（现状无语言标签行/行号）。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_code_block_strips_gutter() {
     let grid = GridSpec::grid_for(120);
     let vm = TuiRenderUnit::TuiAssistantBubble(
@@ -345,6 +355,7 @@ fn test_semantic_code_block_strips_gutter() {
 }
 
 #[test]
+#[serial_test::parallel]
 fn test_semantic_code_block_preserves_source_trailing_spaces() {
     let grid = GridSpec::grid_for(120);
     let vm = TuiRenderUnit::TuiAssistantBubble(
@@ -369,6 +380,7 @@ fn test_semantic_code_block_preserves_source_trailing_spaces() {
 
 /// user bubble：label 行（`You`）与正文行剥离前缀。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_user_bubble() {
     let grid = GridSpec::grid_for(120);
     let vm = TuiRenderUnit::TuiUserBubble(crate::kit::tui_render_unit::TuiUserBubble {
@@ -390,6 +402,7 @@ fn test_semantic_user_bubble() {
 /// `│` 与缩进空格都不出现在语义文本里；工具行（header + 输出）与气泡混排
 /// （reasoning 过程段 + md 正文段）逐行成立；台阶行（§6）返回空语义。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_process_prefix_and_step_are_stripped() {
     crate::i18n::init(Some("en"));
     let grid = GridSpec::grid_for(80);
@@ -523,6 +536,7 @@ fn sem_at_lines(
 /// 过程区符号行（系统 note / Todo 摘要）复制时同样剥净前缀与状态符号：
 /// 首行语义 = 正文（`!` / `◼` 不进剪贴板），续行剥缩进，入口台阶行返回空语义。
 #[test]
+#[serial_test::parallel]
 fn test_semantic_process_note_and_todo_strip_prefix() {
     let grid = GridSpec::grid_for(80);
 

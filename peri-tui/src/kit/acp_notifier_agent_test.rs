@@ -20,6 +20,7 @@ fn spawn_test_notifier() -> (
 /// 验证 AgentEvent 的 SubagentStarted 变体被正确转换并转发到 bridge。
 /// SubagentStopped 同理（此处仅覆盖 SubagentStarted 作为 smoke test）。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_agent_event_forwards_subagent_started() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -63,6 +64,7 @@ async fn test_agent_event_forwards_subagent_started() {
 
 /// LlmRetrying 必须透传安全的重试进度，供 bridge 展示给用户。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_agent_event_forwards_llm_retrying() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -103,6 +105,7 @@ async fn test_agent_event_forwards_llm_retrying() {
 /// 唯一事实源在 TUI 边界不得丢弃（bug 回归：此前 `..` 吞掉 result/is_error，
 /// TUI 只能从 child tool error 反推 block error）。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_agent_event_forwards_subagent_stopped() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -173,6 +176,7 @@ async fn test_agent_event_forwards_subagent_stopped() {
 
 /// 验证未映射的 AcpEvent 变体被静默丢弃（防御性测试）。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_agent_event_unknown_variant_dropped() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -256,6 +260,7 @@ async fn test_goal_snapshot_forwards_to_session_owned_bridge() {
 
 /// SystemNotification（MCP 上下线等）必须透传 text/level 到系统通知面。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_agent_event_forwards_system_notification() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -290,6 +295,7 @@ async fn test_agent_event_forwards_system_notification() {
 /// SessionUpdate tag）；level/channel 为 wire string 化 camelCase
 /// （"warning" / "uiOnly"），解析为结构化枚举后推入 dual-bridge。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_agent_event_parses_command_feedback() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
@@ -324,6 +330,7 @@ async fn test_agent_event_parses_command_feedback() {
 /// CommandFeedback 的 channel=session 显式形态与未知 level/channel 回落
 /// （Info / UiOnly）解析。
 #[tokio::test]
+#[serial_test::parallel]
 async fn test_agent_event_command_feedback_session_channel_and_fallback() {
     let (notif_tx, mut bridge_rx, shutdown) = spawn_test_notifier();
 
