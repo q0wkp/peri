@@ -3,6 +3,7 @@
 use super::*;
 use crate::kit::acp_types::BgTaskSnapshotSource;
 use crate::kit::program_status::{BlockedKind, ProgramStatus};
+use crate::kit::test_support::NotificationGuard;
 
 fn current() -> ProgramStatus {
     *crate::kit::atoms::PROGRAM_STATUS.state().read()
@@ -251,6 +252,7 @@ fn interrupted_and_suspended_keep_working_while_async_agent_runs() {
 #[test]
 #[serial]
 fn last_async_agent_completion_exits_working_to_done() {
+    let _notification = NotificationGuard::install();
     let mut state = reset();
     set_bg_tasks(vec![
         bg_entry("agent-1", "agent", Some("running")),
@@ -285,6 +287,7 @@ fn last_async_agent_cancellation_exits_working_to_idle() {
 #[test]
 #[serial]
 fn agent_completion_while_new_turn_runs_keeps_working() {
+    let _notification = NotificationGuard::install();
     let mut state = reset();
     set_bg_tasks(vec![bg_entry("agent-1", "agent", Some("running"))]);
 

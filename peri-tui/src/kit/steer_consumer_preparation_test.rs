@@ -3,11 +3,12 @@
 //! 构造器复用父模块 `tests`；单独成文件以控制单文件规模。
 
 use crate::kit::steer_state::SteerState;
+use crate::kit::test_support::NotificationGuard;
 use peri_acp::transport::{AcpTransport, mpsc::mpsc_transport_pair};
 
 use super::tests::{
     RECEIPT_TIMEOUT, RestoreProjection, answer_initialize, expect_session_new, first_input_command,
-    notice_text, original_draft, restore_notice, start_consumer,
+    notice_text, original_draft, start_consumer,
 };
 use super::*;
 
@@ -20,8 +21,7 @@ async fn test_session_preparation_timeout_recovers_draft_without_admission() {
         session: atoms::ACTIVE_SESSION_ID.state().read().clone(),
         epoch: atoms::BRIDGE_RESET_COUNTER.get(),
     };
-    let previous_notice = notice_text();
-    atoms::NOTIFICATION.set(None);
+    let _notification = NotificationGuard::install();
     atoms::ACTIVE_SESSION_ID.set(String::new());
     atoms::BRIDGE_RESET_COUNTER.set(32);
     STEERS.set(SteerState::default());
@@ -82,7 +82,6 @@ async fn test_session_preparation_timeout_recovers_draft_without_admission() {
     shutdown.cancel();
     handle.await.unwrap();
     server.await.unwrap();
-    restore_notice(previous_notice);
     client.close();
 }
 
@@ -95,8 +94,7 @@ async fn test_shutdown_during_preparation_keeps_unadmitted_input_identity() {
         session: atoms::ACTIVE_SESSION_ID.state().read().clone(),
         epoch: atoms::BRIDGE_RESET_COUNTER.get(),
     };
-    let previous_notice = notice_text();
-    atoms::NOTIFICATION.set(None);
+    let _notification = NotificationGuard::install();
     atoms::ACTIVE_SESSION_ID.set(String::new());
     atoms::BRIDGE_RESET_COUNTER.set(33);
     STEERS.set(SteerState::default());
@@ -146,6 +144,5 @@ async fn test_shutdown_during_preparation_keeps_unadmitted_input_identity() {
         .expect("取消不得丢弃未受理输入的身份");
     assert_eq!(original_draft(&pending), "取消前的输入", "取消不得改写原稿");
     server.await.unwrap();
-    restore_notice(previous_notice);
     client.close();
 }

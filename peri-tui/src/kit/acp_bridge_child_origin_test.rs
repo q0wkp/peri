@@ -1,4 +1,5 @@
 use super::*;
+use crate::kit::test_support::NotificationGuard;
 use crate::kit::{stream_data::TuiTextChunk, tui_render_unit::TuiRenderUnit};
 use peri_acp_types::{
     event::ChildEventOrigin,
@@ -92,7 +93,7 @@ async fn child_origin_new_run_without_old_stop_and_same_session_reset_are_isolat
     let old_live = atoms::BG_LIVE_DETAIL.state().read().clone();
     let old_identity = atoms::BG_TASK_IDENTITY.state().read().clone();
     let old_agent_ids = atoms::BG_AGENT_IDS.state().read().clone();
-    let old_notification = atoms::NOTIFICATION.state().write().take();
+    let _notification = NotificationGuard::install();
 
     let epoch = old_reset.wrapping_add(1);
     atoms::ACTIVE_SESSION_ID.set("s1".into());
@@ -216,5 +217,4 @@ async fn child_origin_new_run_without_old_stop_and_same_session_reset_are_isolat
     atoms::BG_LIVE_DETAIL.set(old_live);
     atoms::BG_TASK_IDENTITY.set(old_identity);
     atoms::BG_AGENT_IDS.set(old_agent_ids);
-    atoms::NOTIFICATION.set(old_notification);
 }

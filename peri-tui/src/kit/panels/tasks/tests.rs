@@ -10,6 +10,7 @@ use std::sync::mpsc::Receiver;
 
 use super::*;
 use crate::kit::atoms::{ACTIVE_PANEL, OPEN_PANELS};
+use crate::kit::test_support::NotificationGuard;
 use ratatui_kit::crossterm::event::{KeyEvent, KeyModifiers, MouseEvent};
 use ratatui_kit::ratatui::buffer::Buffer;
 use serial_test::serial;
@@ -200,38 +201,6 @@ impl Drop for PanelStackGuard {
     fn drop(&mut self) {
         *OPEN_PANELS.state().write() = std::mem::take(&mut self.open);
         *ACTIVE_PANEL.state().write() = self.active;
-    }
-}
-
-/// 状态栏通知的保存/恢复（`Notification` 不可 Clone，按原消息重新发布）。
-struct NotificationGuard(Option<String>);
-
-impl NotificationGuard {
-    fn install() -> Self {
-        let previous = NOTIFICATION
-            .state()
-            .read()
-            .as_ref()
-            .map(|notice| notice.message.clone());
-        NOTIFICATION.set(None);
-        Self(previous)
-    }
-
-    fn message() -> Option<String> {
-        NOTIFICATION
-            .state()
-            .read()
-            .as_ref()
-            .map(|notice| notice.message.clone())
-    }
-}
-
-impl Drop for NotificationGuard {
-    fn drop(&mut self) {
-        NOTIFICATION.set(self.0.take().map(|message| Notification {
-            message,
-            until: peri_time::monotonic_now() + Duration::from_secs(6),
-        }));
     }
 }
 

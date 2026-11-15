@@ -4,6 +4,7 @@ use super::super::*;
 use super::support::*;
 
 use crate::kit::atoms::ACP_STATE;
+use crate::kit::test_support::NotificationGuard;
 use serial_test::serial;
 
 #[tokio::test]

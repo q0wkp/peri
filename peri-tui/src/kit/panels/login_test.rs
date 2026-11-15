@@ -15,6 +15,7 @@ use super::config_store::delete_candidate;
 use super::edit_state::ProviderKind;
 use crate::config::ProviderConfig;
 use crate::kit::atoms::PROVIDER_LIST;
+use crate::kit::test_support::NotificationGuard;
 use ratatui_kit::crossterm::event::{Event, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui_kit::prelude::{EventResult, State, element};
 use ratatui_kit::ratatui::buffer::Buffer;
@@ -54,21 +55,6 @@ impl ProviderListGuard {
 impl Drop for ProviderListGuard {
     fn drop(&mut self) {
         *PROVIDER_LIST.state().write() = std::mem::take(&mut self.0);
-    }
-}
-
-/// 面板提示（NOTIFICATION）的保存/恢复。
-struct NotificationGuard(Option<Notification>);
-
-impl NotificationGuard {
-    fn install() -> Self {
-        Self(NOTIFICATION.state().write().take())
-    }
-}
-
-impl Drop for NotificationGuard {
-    fn drop(&mut self) {
-        *NOTIFICATION.state().write() = self.0.take();
     }
 }
 

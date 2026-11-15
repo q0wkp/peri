@@ -25,8 +25,9 @@ fn test_parse_permission_mode_invalid() {
 // cron 面板测试）；保存入口经 `activate_row_with` 注入，单测绝不写真实配置文件。
 
 use crate::app::panel_types::PanelKind;
-use crate::kit::atoms::{NOTIFICATION, Notification, PANEL_SCROLL_OWNER, PERI_CONFIG_HANDLE};
+use crate::kit::atoms::{NOTIFICATION, PANEL_SCROLL_OWNER, PERI_CONFIG_HANDLE};
 use crate::kit::panels::shared::list::{ListViewport, content_rows};
+use crate::kit::test_support::NotificationGuard;
 use fluent_bundle::FluentValue;
 use ratatui_kit::crossterm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui_kit::prelude::{EventResult, State, element};
@@ -65,14 +66,14 @@ fn last_row() -> usize {
 
 /// 全局 atoms 的保存/恢复——断言失败也不污染其它测试。
 struct PanelAtomsGuard {
-    notification: Option<Notification>,
+    _notification: NotificationGuard,
     scroll_owner: Option<crate::kit::panel_scroll::PanelScrollOwner>,
 }
 
 impl PanelAtomsGuard {
     fn install() -> Self {
         Self {
-            notification: std::mem::take(&mut *NOTIFICATION.state().write()),
+            _notification: NotificationGuard::install(),
             scroll_owner: std::mem::take(&mut *PANEL_SCROLL_OWNER.state().write()),
         }
     }
@@ -80,7 +81,6 @@ impl PanelAtomsGuard {
 
 impl Drop for PanelAtomsGuard {
     fn drop(&mut self) {
-        *NOTIFICATION.state().write() = self.notification.take();
         *PANEL_SCROLL_OWNER.state().write() = self.scroll_owner.take();
     }
 }

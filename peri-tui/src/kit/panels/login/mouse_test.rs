@@ -113,6 +113,7 @@ fn mouse_click_focuses_the_recovery_store_row() {
 #[test]
 #[serial]
 fn mouse_click_choices_match_keyboard_actions() {
+    let _notification = NotificationGuard::install();
     let base = new_responses_mouse_state();
     let area = tall_area();
     let mut frame = 0usize;

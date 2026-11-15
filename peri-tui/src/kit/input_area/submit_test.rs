@@ -7,6 +7,7 @@ use super::super::reset_submit_side_effect_state;
 use super::*;
 use crate::app::panel_types::PanelKind;
 use crate::kit::atoms::{PENDING_ATTACHMENTS, VIEW_MODELS};
+use crate::kit::test_support::NotificationGuard;
 use serial_test::serial;
 
 fn make_submit_recorder() -> std::sync::Arc<parking_lot::Mutex<Vec<SubmitRequest>>> {
@@ -273,6 +274,7 @@ fn test_submit_text_image_only_enqueues_when_steer_enabled() {
 #[test]
 #[serial]
 fn test_submit_text_loading_clear_shows_notification_without_history_or_buffer() {
+    let _notification = NotificationGuard::install();
     reset_submit_side_effect_state();
     ACP_STATE.state().write().is_loading = true;
     submit_text("/clear".to_string());

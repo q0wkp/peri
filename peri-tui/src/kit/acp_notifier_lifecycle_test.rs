@@ -1,6 +1,7 @@
 use super::*;
 use crate::acp_client::AcpTuiClient;
 use crate::kit::atoms::BufferedInput;
+use crate::kit::test_support::NotificationGuard;
 use peri_acp::transport::{AcpTransport, mpsc::mpsc_transport_pair};
 use serde_json::json;
 use serial_test::serial;
@@ -103,6 +104,7 @@ async fn test_agent_done_cancelled_forwards_request_id_to_turn_interrupted() {
 #[tokio::test]
 #[serial]
 async fn test_channel_close_exits_cleanly() {
+    let _notification = NotificationGuard::install();
     let (notif_tx, _bridge_rx, shutdown) = spawn_test_notifier();
 
     // 模拟 transport 断开：drop sender 让 recv() 返回 None
@@ -133,7 +135,7 @@ async fn test_channel_close_resets_loading_and_input_buffer() {
     }
     let queued = BufferedInput::text("queued");
     INPUT_BUFFER.state().write().push_back(queued);
-    *NOTIFICATION.state().write() = None;
+    let _notification = NotificationGuard::install();
     let hb_before = *RENDER_HEARTBEAT.state().read();
 
     let (notif_tx, _bridge_rx, shutdown) = spawn_test_notifier();
@@ -175,7 +177,7 @@ async fn test_real_wiring_transport_death_resets_loading() {
     ACP_STATE.state().write().is_loading = true;
     let queued = BufferedInput::text("queued");
     INPUT_BUFFER.state().write().push_back(queued);
-    *NOTIFICATION.state().write() = None;
+    let _notification = NotificationGuard::install();
     let hb_before = *RENDER_HEARTBEAT.state().read();
 
     // 生产 wiring：client + pump + notifier（bridge 用 dummy rx 即可）
@@ -228,7 +230,7 @@ async fn unreachable_failure_event_converges_via_notification_close() {
         .state()
         .write()
         .push_back(BufferedInput::text("queued-before-transport-death"));
-    *NOTIFICATION.state().write() = None;
+    let _notification = NotificationGuard::install();
     let hb_before = *RENDER_HEARTBEAT.state().read();
 
     let (notif_tx, notif_rx) =

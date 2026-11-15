@@ -2,11 +2,12 @@
 
 use super::{DownloadRequest, THEME_LIST, trigger_download_themes_with};
 use crate::kit::atoms::{
-    DOWNLOAD_PROGRESS, DownloadProgressPayload, FileDownloadStatus, NOTIFICATION, Notification,
-    POPUP_KIND, PopupKind,
+    DOWNLOAD_PROGRESS, DownloadProgressPayload, FileDownloadStatus, NOTIFICATION, POPUP_KIND,
+    PopupKind,
 };
 use crate::kit::popup_overlay::close_popup;
 use crate::kit::popups::download_progress::handle_download_progress_event;
+use crate::kit::test_support::NotificationGuard;
 use ratatui_kit::{
     crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers},
     prelude::EventResult,
@@ -25,7 +26,7 @@ const WAIT: Duration = Duration::from_secs(5);
 struct AtomsGuard {
     progress: DownloadProgressPayload,
     popup: Option<PopupKind>,
-    notification: Option<Notification>,
+    _notification: NotificationGuard,
     catalog: Option<Vec<String>>,
 }
 
@@ -34,7 +35,7 @@ impl AtomsGuard {
         let guard = Self {
             progress: DOWNLOAD_PROGRESS.state().read().clone(),
             popup: *POPUP_KIND.state().read(),
-            notification: NOTIFICATION.state().write().take(),
+            _notification: NotificationGuard::install(),
             catalog: None,
         };
         *DOWNLOAD_PROGRESS.state().write() = DownloadProgressPayload::default();
@@ -52,7 +53,6 @@ impl Drop for AtomsGuard {
         // Tests join every worker and HTTP peer before restoring these atoms.
         *DOWNLOAD_PROGRESS.state().write() = self.progress.clone();
         *POPUP_KIND.state().write() = self.popup;
-        *NOTIFICATION.state().write() = self.notification.take();
         if let Some(catalog) = self.catalog.take() {
             *THEME_LIST.state().write() = catalog;
         }

@@ -6,6 +6,7 @@ use crate::kit::history_paging::{
     WindowBodyDescriptor, WindowPageItem, WindowPageResponse, WindowSubItem,
 };
 use crate::kit::history_window::{HistoryWindow, HistoryWindowConfig, WindowIdentity};
+use crate::kit::test_support::NotificationGuard;
 use serial_test::serial;
 
 #[path = "history_window_page_test/late_open_and_gap.rs"]
@@ -1173,6 +1174,7 @@ fn inherited_items_keep_source_and_are_pinned() {
 #[test]
 #[serial]
 fn inherited_unsupported_response_surfaces_explicit_notice() {
+    let _notification = NotificationGuard::install();
     let (mut state, _guard) = state_with_window();
     let identity = state.window.identity().cloned().expect("identity");
     let mut response = response(identity, vec![inherited_text_item("inh", "frozen")]);
@@ -1201,7 +1203,6 @@ fn inherited_unsupported_response_surfaces_explicit_notice() {
     );
     assert!(crate::kit::atoms::NOTIFICATION.state().read().is_some());
     crate::kit::atoms::HISTORY_INHERITED_NOTICE.set(None);
-    crate::kit::atoms::NOTIFICATION.set(None);
 }
 
 #[test]

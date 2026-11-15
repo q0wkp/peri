@@ -82,19 +82,3 @@ pub(super) fn make_interactive_client_without_pump() -> (AcpTuiClient, MpscServe
         AcpTuiClient::new_interactive(client_transport);
     (client, server_transport)
 }
-
-/// 取走并清空全局 NOTIFICATION，结束（含 panic）时原样放回；用例写通知后不会
-/// 把它留给后续断言通知为空的测试。
-pub(super) struct NotificationGuard(Option<crate::kit::atoms::Notification>);
-
-impl NotificationGuard {
-    pub(super) fn install() -> Self {
-        Self(NOTIFICATION.state().write().take())
-    }
-}
-
-impl Drop for NotificationGuard {
-    fn drop(&mut self) {
-        *NOTIFICATION.state().write() = self.0.take();
-    }
-}

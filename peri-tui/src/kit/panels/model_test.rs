@@ -45,8 +45,9 @@ mod commit;
 // 哪一行 → 切哪一档」，真实持久化由 `model/commit_test.rs` 覆盖。
 
 use crate::app::panel_types::PanelKind;
-use crate::kit::atoms::{NOTIFICATION, Notification, PANEL_SCROLL_OWNER, PERI_CONFIG_HANDLE};
+use crate::kit::atoms::{NOTIFICATION, PANEL_SCROLL_OWNER, PERI_CONFIG_HANDLE};
 use crate::kit::panels::shared::list::{ListViewport, content_rows};
+use crate::kit::test_support::NotificationGuard;
 use ratatui_kit::components::scroll_view::ScrollViewState;
 use ratatui_kit::crossterm::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -96,7 +97,7 @@ fn ensure_config_handle() -> Arc<parking_lot::RwLock<crate::config::PeriConfig>>
 struct ModelPanelGuard {
     handle: Arc<parking_lot::RwLock<crate::config::PeriConfig>>,
     config: crate::config::PeriConfig,
-    notification: Option<Notification>,
+    _notification: NotificationGuard,
     scroll_owner: Option<crate::kit::panel_scroll::PanelScrollOwner>,
     open_panels: Vec<PanelKind>,
     active_panel: Option<PanelKind>,
@@ -107,7 +108,7 @@ impl ModelPanelGuard {
     fn install() -> Self {
         let handle = ensure_config_handle();
         let config = handle.read().clone();
-        let notification = std::mem::take(&mut *NOTIFICATION.state().write());
+        let notification = NotificationGuard::install();
         let scroll_owner = std::mem::take(&mut *PANEL_SCROLL_OWNER.state().write());
         let open_panels = std::mem::take(&mut *crate::kit::atoms::OPEN_PANELS.state().write());
         let active_panel = std::mem::take(&mut *crate::kit::atoms::ACTIVE_PANEL.state().write());
@@ -116,7 +117,7 @@ impl ModelPanelGuard {
         Self {
             handle,
             config,
-            notification,
+            _notification: notification,
             scroll_owner,
             open_panels,
             active_panel,
@@ -136,7 +137,6 @@ impl ModelPanelGuard {
 impl Drop for ModelPanelGuard {
     fn drop(&mut self) {
         *self.handle.write() = self.config.clone();
-        *NOTIFICATION.state().write() = self.notification.take();
         *PANEL_SCROLL_OWNER.state().write() = self.scroll_owner.take();
         *crate::kit::atoms::OPEN_PANELS.state().write() = std::mem::take(&mut self.open_panels);
         *crate::kit::atoms::ACTIVE_PANEL.state().write() = self.active_panel.take();

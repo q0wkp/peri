@@ -9,6 +9,7 @@ use std::rc::Rc;
 use crate::app::panel_types::PanelKind;
 use crate::kit::atoms::{CRON_ACTION_ERROR, CRON_JOBS, CronJobSummary, PANEL_SCROLL_OWNER};
 use crate::kit::panels::shared::list::{ListViewport, content_rows};
+use crate::kit::test_support::NotificationGuard;
 use ratatui_kit::crossterm::event::{
     Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
@@ -424,6 +425,7 @@ fn confirm_delete_uses_captured_id_after_reorder() {
 #[test]
 #[serial]
 fn confirm_target_gone_skips_delete() {
+    let _notification = NotificationGuard::install();
     let _guard = PanelAtomsGuard::install(vec![job(0), job(1)]);
     let captured = captured();
 

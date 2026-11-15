@@ -1,4 +1,5 @@
 use super::*;
+use crate::kit::test_support::NotificationGuard;
 
 // ── Slice 2：entry 焦点导航纯函数 ─────────────────────────────────────────
 
@@ -237,7 +238,7 @@ fn test_tool_expand_claims_deferred_history_result_refetch() {
     use crate::kit::tui_render_unit::TuiToolCard;
 
     crate::kit::atoms::init_atoms();
-    crate::kit::atoms::NOTIFICATION.set(None);
+    let _notification = NotificationGuard::install();
     *crate::kit::atoms::ACTIVE_SESSION_ID.state().write() = "s1".into();
     crate::kit::acp_events::history_window::clear_pending_tool_ends();
     insert_deferred_tool_result_for_tests(

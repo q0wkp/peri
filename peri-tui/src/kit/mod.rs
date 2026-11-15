@@ -74,6 +74,8 @@ pub(crate) mod submit_admission;
 pub mod submit_consumer;
 pub mod submit_request;
 pub mod terminal_caps;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod text_selection;
 pub mod text_util;
 pub mod thread_load_consumer;

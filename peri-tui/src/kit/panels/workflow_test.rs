@@ -9,6 +9,7 @@ use std::cell::{Cell, RefCell};
 
 use super::*;
 use crate::kit::atoms::{ACTIVE_PANEL, OPEN_PANELS};
+use crate::kit::test_support::NotificationGuard;
 use crate::kit::workflow_snapshot::WorkflowSnapshot;
 use ratatui_kit::crossterm::event::{KeyEvent, KeyModifiers};
 use ratatui_kit::ratatui::buffer::Buffer;
@@ -102,39 +103,6 @@ impl Drop for WorkflowGuard {
         BRIDGE_RESET_COUNTER.set(self.reset);
         *OPEN_PANELS.state().write() = std::mem::take(&mut self.open_panels);
         *ACTIVE_PANEL.state().write() = self.active_panel.take();
-    }
-}
-
-/// 状态栏通知的保存/恢复（`Notification` 不可 Clone，按原消息重新发布）。
-struct NotificationGuard(Option<String>);
-
-impl NotificationGuard {
-    fn install() -> Self {
-        let previous = NOTIFICATION
-            .state()
-            .read()
-            .as_ref()
-            .map(|notice| notice.message.clone());
-        NOTIFICATION.set(None);
-        Self(previous)
-    }
-
-    /// 当前通知文案——终止请求的结果必须对用户可见，不能只留日志。
-    fn message() -> Option<String> {
-        NOTIFICATION
-            .state()
-            .read()
-            .as_ref()
-            .map(|notice| notice.message.clone())
-    }
-}
-
-impl Drop for NotificationGuard {
-    fn drop(&mut self) {
-        NOTIFICATION.set(self.0.take().map(|message| Notification {
-            message,
-            until: peri_time::monotonic_now() + Duration::from_secs(2),
-        }));
     }
 }
 
