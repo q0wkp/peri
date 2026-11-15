@@ -119,10 +119,13 @@ fn test_debug_export_path_uses_cwd_and_timestamp_prefix() {
     assert!(name.ends_with(".txt"));
 }
 
+// 导出会写全局 NOTIFICATION（先清空、再断言已写入），与其他读写该 atom 的
+// #[serial] 测试并行会互相覆盖，必须同它们互斥。
 #[tokio::test]
+#[serial]
 async fn test_execute_view_action_export_text_writes_notification() {
+    let _notification = NotificationGuard::install();
     let tempdir = tempfile::tempdir().expect("tempdir");
-    *NOTIFICATION.state().write() = None;
     execute_view_action(
         ViewActionRequest::ExportText(ExportMode::All),
         &make_client_without_pump().0,

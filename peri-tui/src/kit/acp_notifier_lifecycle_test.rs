@@ -98,7 +98,10 @@ async fn test_agent_done_cancelled_forwards_request_id_to_turn_interrupted() {
     shutdown.cancel();
 }
 
+// channel 关闭会触发 notifier 兜底写全局 atom（含 PROGRAM_STATUS=Error），
+// 必须与其他读写这些 atom 的 #[serial] 测试互斥。
 #[tokio::test]
+#[serial]
 async fn test_channel_close_exits_cleanly() {
     let (notif_tx, _bridge_rx, shutdown) = spawn_test_notifier();
 
