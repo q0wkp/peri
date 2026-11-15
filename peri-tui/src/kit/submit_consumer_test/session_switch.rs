@@ -4,6 +4,7 @@ use super::super::*;
 use super::support::*;
 
 use crate::kit::atoms::NOTIFICATION;
+use crate::kit::test_support::NotificationGuard;
 use peri_acp::transport::AcpTransport;
 use serde_json::json;
 use serial_test::serial;
@@ -18,7 +19,7 @@ use std::time::Duration;
 async fn test_queued_submit_is_cancelled_after_session_switch() {
     crate::kit::atoms::init_atoms();
     // 本用例会真实建会话并写 NOTIFICATION；与其它 serial 用例共用全局态。
-    let previous_notification = std::mem::take(&mut *NOTIFICATION.state().write());
+    let _notification = NotificationGuard::install();
     let (client, server) = make_client_without_pump();
     client.force_stable_for_test("session-a", false);
     let (tx, rx) = mpsc::unbounded_channel::<SubmitRequest>();
@@ -58,7 +59,6 @@ async fn test_queued_submit_is_cancelled_after_session_switch() {
         "取消排队提交必须有用户可见反馈"
     );
 
-    *NOTIFICATION.state().write() = previous_notification;
     shutdown.cancel();
     let _ = tokio::time::timeout(Duration::from_millis(500), consumer).await;
 }
@@ -71,7 +71,7 @@ async fn test_queued_submit_is_cancelled_after_session_switch() {
 #[serial]
 async fn test_initializing_cohort_cancels_after_session_switch() {
     crate::kit::atoms::init_atoms();
-    let previous_notification = std::mem::take(&mut *NOTIFICATION.state().write());
+    let _notification = NotificationGuard::install();
     let (client, server) = make_client_without_pump();
     let (probe_tx, mut probe_rx) = mpsc::unbounded_channel();
     admission_probe::install("probe-session-a", probe_tx);
@@ -121,7 +121,6 @@ async fn test_initializing_cohort_cancels_after_session_switch() {
     );
 
     admission_probe::clear();
-    *NOTIFICATION.state().write() = previous_notification;
     shutdown.cancel();
     let _ = tokio::time::timeout(Duration::from_millis(500), consumer).await;
 }
@@ -131,7 +130,7 @@ async fn test_initializing_cohort_cancels_after_session_switch() {
 #[serial]
 async fn test_initializing_cohort_cancels_after_same_session_reload() {
     crate::kit::atoms::init_atoms();
-    let previous_notification = std::mem::take(&mut *NOTIFICATION.state().write());
+    let _notification = NotificationGuard::install();
     let (client, server) = make_client_without_pump();
     let (probe_tx, mut probe_rx) = mpsc::unbounded_channel();
     admission_probe::install("probe-session-a", probe_tx);
@@ -179,7 +178,6 @@ async fn test_initializing_cohort_cancels_after_same_session_reload() {
     );
 
     admission_probe::clear();
-    *NOTIFICATION.state().write() = previous_notification;
     shutdown.cancel();
     let _ = tokio::time::timeout(Duration::from_millis(500), consumer).await;
 }
@@ -189,7 +187,7 @@ async fn test_initializing_cohort_cancels_after_same_session_reload() {
 #[serial]
 async fn test_input_during_session_load_keeps_new_cohort() {
     crate::kit::atoms::init_atoms();
-    let previous_notification = std::mem::take(&mut *NOTIFICATION.state().write());
+    let _notification = NotificationGuard::install();
     let (client, server) = make_client_without_pump();
     let (tx, rx) = mpsc::unbounded_channel::<SubmitRequest>();
     let shutdown = CancellationToken::new();
@@ -249,7 +247,6 @@ async fn test_input_during_session_load_keeps_new_cohort() {
         .await
         .unwrap();
 
-    *NOTIFICATION.state().write() = previous_notification;
     shutdown.cancel();
     let _ = tokio::time::timeout(Duration::from_millis(500), consumer).await;
 }
