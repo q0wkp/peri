@@ -49,7 +49,7 @@ pub fn BgTaskArea(mut hooks: Hooks) -> impl Into<AnyElement<'static>> {
     let _heartbeat = hooks.use_atom(&atoms::RENDER_HEARTBEAT);
     let (term_w, _) = hooks.use_terminal_size();
 
-    // [§3.1] 居中带由 AppShell 的 `CenterBand` 包装在 draw 期收窄——与
+    // [§3.1] 内容带由 AppShell 的 `ContentBand` 包装在 draw 期统一区域——与
     // transcript / composer / 状态栏同宽；`area_rect` 是行命中区域的坐标基准，
     // 行文本按带宽截断/填充。
     let grid = GridSpec::grid_for(term_w);

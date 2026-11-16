@@ -372,8 +372,8 @@ pub struct StatusBarProps {
 pub fn StatusBar(props: &StatusBarProps, mut hooks: Hooks) -> impl Into<AnyElement<'static>> {
     let _lang = hooks.use_atom(&atoms::LANG_VERSION);
 
-    // [§3.1] 居中带由 AppShell 的 `CenterBand` 包装在 draw 期收窄；Row1 的
-    // 折行与点击列都以收窄后的区域为准（`use_previous_size` / AreaTracker 在其后）。
+    // [§3.1] 内容带由 AppShell 的 `ContentBand` 包装在 draw 期统一区域；Row1 的
+    // 折行与点击列都以内容区域为准（`use_previous_size` / AreaTracker 在其后）。
 
     // §11：h<8 完全隐藏；h<12 仅 Row1 + NotifRow（无 key hints / 缓冲行）。
     // Row2 是独立组件，条件渲染不违反 hook 顺序（计划 Slice 1c 裁决）。

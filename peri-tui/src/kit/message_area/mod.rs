@@ -115,10 +115,7 @@ pub fn MessageArea(props: &MessageAreaProps, mut hooks: Hooks) -> impl Into<AnyE
     // [Slice 3] Transcript 统一水平网格（§3.1）——content 列宽来自 SessionColumn。
     let grid = props.grid;
 
-    // [§3.1] 滚动条是窗口级 chrome——锚在窗口最右列，不随居中带内移。
-    // MessageArea 由 `CenterBand` 在 draw 期收窄，本 hook 的
-    // `pre_component_draw` 看到的是 band；render body 每帧写入终端宽度与网格，
-    // 由 `ScrollbarHook` 还原外框，渲染与命中测试共用该矩形。
+    // 滚动条固定在窗口最右列，绘制与命中测试共用同一外框。
     let (term_w, _) = hooks.use_terminal_size();
     let scrollbar_fields = hooks.use_state(ScrollbarFields::default);
     let scrollbar_area = {

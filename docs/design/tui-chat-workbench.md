@@ -56,7 +56,8 @@ active issue。
   Todo 摘要、折叠组、气泡内 reasoning，以及 **assistant 短回复**（`TuiAssistantBubble::is_brief`：
   `chars().count() < 120`；空正文的纯 reasoning/工具轮恒为短回复）等过程区 entry 在
   Wide/Standard（≥60 列）整体右移 2 格，其正文可用宽度相应收窄 2 格，右缘（duration 等
-  metadata 对齐列）和整带居中不变；短回复判定只作用于 assistant——user 气泡永不缩进；
+  metadata 对齐列）不变；主界面内容带左侧对齐并占满终端宽度，正文随终端扩展；
+  短回复判定只作用于 assistant——user 气泡永不缩进；
   后续 user prompt 前固定保留 turn 分隔线，下一行直接显示 prompt：分隔线左缘以 `├` 接续文本区竖线，
   穿过 gap 后铺满正文列；分隔线属文本区，不参与缩进，随 prompt 一起保留至回合结束后；
 - 过程区由**转场台阶**接回文本区：进入 ` ╰─╮`、退出 ` ╭─╯`（各 1 行、宽 4，col1 `╰`/`╭`

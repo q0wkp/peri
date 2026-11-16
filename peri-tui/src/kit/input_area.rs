@@ -132,7 +132,7 @@ pub fn InputArea(props: &InputAreaProps, mut hooks: Hooks) -> impl Into<AnyEleme
     let _slash_command_count = slash_commands.read().len();
     let _ = slash_commands;
 
-    // [§3.1] 居中带由 SessionColumn 的 `CenterBand` 包装在 draw 期收窄；
+    // [§3.1] 内容带由 SessionColumn 的 `ContentBand` 包装在 draw 期统一区域；
     // AreaTracker 因此记录 band，composer_area 是光标与点击列的坐标基准。
 
     // 追踪 composer 区域 + overlay 高度，用于鼠标点击→光标定位

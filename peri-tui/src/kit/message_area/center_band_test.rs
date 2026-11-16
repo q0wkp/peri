@@ -1,7 +1,7 @@
-//! 居中带鼠标命中回归（P1）：渲染列与 `CopyButtonHit` 屏幕列必须同源于 band。
+//! 内容带鼠标命中回归（P1）：渲染列与 `CopyButtonHit` 屏幕列必须同源于 band。
 
 use super::*;
-use crate::kit::layout::{CenterBand, center_band_area};
+use crate::kit::layout::{ContentBand, content_band_area};
 use crate::kit::message_area::grid::GridSpec;
 use ratatui_kit::ratatui::{layout::Rect, style::Style};
 use ratatui_kit::test_util::render_frame;
@@ -65,17 +65,15 @@ impl Component for ButtonProbe {
     }
 }
 
-/// 140 列终端 left_pad=11：按钮视觉列 = band.x + 相对偏移；
-/// `CopyButtonHit` 屏幕列公式 `area.x + btn.x_start` 必须命中同一格。
-/// 回归时 tracker 记录 band、渲染从 x=0 开始，点击需右移 left_pad 才命中。
+/// 全宽终端的按钮绘制列与鼠标命中列一致。
 #[test]
 fn copy_button_hit_column_matches_rendered_button_in_center_band() {
     const BTN_X_START: u16 = 62;
     let grid = GridSpec::grid_for(140);
-    let band = center_band_area(Rect::new(0, 0, 140, 5), grid);
+    let band = content_band_area(Rect::new(0, 0, 140, 5), grid);
     let sink = Arc::new(Mutex::new(None));
     let buf = render_frame(
-        element!(CenterBand(grid: grid) {
+        element!(ContentBand(grid: grid) {
             ButtonProbe(text: "COPY", x_start: BTN_X_START, sink: sink.clone())
         }),
         140,
