@@ -450,3 +450,26 @@ fn test_middle_truncate_by_width_cjk_and_emoji() {
     assert!(out.width() <= 8, "emoji 组合序列不得超宽: {out:?}");
     assert!(out.ends_with(family), "尾部 ZWJ 序列必须完整: {out:?}");
 }
+
+#[test]
+fn test_truncate_text_zero_budget_and_unicode_boundaries() {
+    for text in ["", "ASCII", "你好世界", "e\u{301}👨‍👩‍👧‍👦尾部"] {
+        for budget in [0, 1, 2, 5, 20, usize::MAX] {
+            let expected = if text.chars().count() > budget {
+                format!("{}...", text.chars().take(budget).collect::<String>())
+            } else {
+                text.to_string()
+            };
+            assert_eq!(truncate_text(text, budget), expected, "budget={budget}");
+        }
+    }
+}
+
+#[test]
+fn test_summarize_large_agent_prompt_keeps_bounded_preview() {
+    let prompt = "中文👨‍👩‍👧‍👦".repeat(10_000);
+    let input = serde_json::json!({"subagent_type": "Explore", "prompt": prompt});
+    let preview = summarize_input("Agent", &input);
+    let expected: String = prompt.chars().take(400).collect();
+    assert_eq!(preview, format!("Explore {expected}..."));
+}

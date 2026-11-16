@@ -123,3 +123,71 @@ fn test_highlight_combined_marks_and_flags_keep_grapheme_boundaries() {
         assert_eq!(full, text);
     }
 }
+
+#[test]
+fn full_middle_line_highlight_skips_wrap_measurement() {
+    let text = format!("你好{FAMILY}e\u{301} ").repeat(1000);
+    let line = Line::from(vec![
+        Span::styled(text.clone(), Style::default().fg(Color::Red)),
+        Span::raw("尾部"),
+    ]);
+    let (_, map) = build_wrap_map(std::slice::from_ref(&line), 20);
+    let entry = WrappedLineInfo {
+        visual_start: 1,
+        visual_end: map[0].visual_end + 1,
+        ..map[0].clone()
+    };
+    WRAP_BOUNDARY_MEASUREMENTS.with(|count| count.set(0));
+    let highlighted =
+        highlight_line_in_selection(&line, &entry, 0, entry.visual_end, 1, 2, 20, test_style());
+    assert_eq!(
+        highlighted_text(&highlighted, TEST_BG),
+        format!("{text}尾部")
+    );
+    assert_eq!(highlighted.spans[0].style.fg, Some(Color::Red));
+    WRAP_BOUNDARY_MEASUREMENTS.with(|count| assert_eq!(count.get(), 0));
+}
+
+#[test]
+fn multiline_copy_measures_only_selection_boundaries() {
+    let middle = format!("你好{FAMILY}e\u{301} ").repeat(1000);
+    let lines = vec![make_line("abcdef"), make_line(&middle), make_line("uvwxyz")];
+    let (_, map) = build_wrap_map(&lines, 20);
+    let last_row = map.last().unwrap().visual_start;
+    let slots = vec![Arc::new(lines)];
+    WRAP_BOUNDARY_MEASUREMENTS.with(|count| count.set(0));
+    let copied = extract_visual_range(&slots, &[0], &map, (0, 2), (last_row, 3), 20, None, None);
+    assert_eq!(copied, Some(format!("cdef\n{middle}\nuvw")));
+    WRAP_BOUNDARY_MEASUREMENTS.with(|count| assert_eq!(count.get(), 2));
+}
+
+#[test]
+fn borrowed_paragraph_preserves_span_boundaries_styles_and_alignment() {
+    use ratatui_kit::ratatui::{
+        buffer::Buffer,
+        layout::{Alignment, Rect},
+        widgets::Widget,
+    };
+    let line = Line::from(vec![
+        Span::styled("中文 👨‍".to_string(), Style::default().fg(Color::Red)),
+        Span::styled(
+            "👩‍👧‍👦 abc e\u{301}".to_string(),
+            Style::default().fg(Color::Blue),
+        ),
+    ])
+    .right_aligned()
+    .style(Style::default().bg(Color::Green));
+    let area = Rect::new(0, 0, 12, 5);
+    let owned = Paragraph::new(line.clone()).wrap(Wrap { trim: false });
+    let borrowed = wrapped_paragraph(&line);
+    assert_eq!(
+        borrowed.line_count(area.width),
+        owned.line_count(area.width)
+    );
+    let mut expected = Buffer::empty(area);
+    let mut actual = Buffer::empty(area);
+    owned.render(area, &mut expected);
+    borrowed.render(area, &mut actual);
+    assert_eq!(actual, expected);
+    assert_eq!(line.alignment, Some(Alignment::Right));
+}

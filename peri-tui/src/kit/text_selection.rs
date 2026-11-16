@@ -114,11 +114,12 @@ impl TextSelection {
 
 /// 将 Line 的所有 span 内容拼接为纯文本。
 pub fn line_to_plain_text(line: &Line) -> String {
-    line.spans
-        .iter()
-        .map(|s| s.content.as_ref())
-        .collect::<Vec<&str>>()
-        .concat()
+    let capacity = line.spans.iter().map(|span| span.content.len()).sum();
+    let mut text = String::with_capacity(capacity);
+    for span in &line.spans {
+        text.push_str(&span.content);
+    }
+    text
 }
 
 /// 在纯文本 text 中，将 visual_col 转换为 byte 偏移量。

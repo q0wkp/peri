@@ -149,7 +149,7 @@ re-export，`tui_config.rs` 只 re-export core `ui::TuiConfig`。`kit/entry.rs` 
 | GridSpec 网格 | `message_area/grid.rs`（`grid_for` / `line_width`）+ `layout.rs`（`content_band_area` / `ContentBand`） | 断点（`Breakpoint`）、文本区基准列与过程区缩进（`indent`：≥60 列 +2；`ZoneTransition` 转场台阶（`TextLineSource` 决定线色）；`process_marker_col` / `process_prefix_width` / `process_content_width`）及行首/续行前缀宽度；全部行渲染的对齐基准。主界面 `band_width = term_width`、`left_pad = 0`，正文按 `term_width - 6`（至少 1 列）扩展。MessageArea / InputArea / StatusBar / BgTaskArea 共用 `ContentBand`，左侧对齐并占满终端宽度；滚动条渲染与命中共用窗口外框（`props.rs::ScrollbarHook` / `scroll/event.rs`），固定在终端最右列。回归见 `grid.rs::tests`、`layout.rs::tests`、`center_band_test.rs` 与 `scroll/gesture_test.rs`。 |
 | scroll 滚动引擎 | `message_area/scroll.rs` + `scroll/{event,gesture,auto_follow}.rs` | `handle_event`；滚轮逐事件落地、拖拽选中、键盘滚动、吸底跟随；文本手势持有 Drag/Up pointer capture，拖出消息带或进入滚动条列仍收尾，越界终点夹到视口，Up 不受节流并更新复制终点；回归见 `scroll/gesture_test.rs` |
 | 滚动条外观 | `scrollbar_chrome.rs` + `message_area/props.rs` + `panels/subagent_detail.rs` | `draw_scrollbar` 统一主体与 subagent 详情的留白滑块、上下箭头和主题色；各视图提供自身的内容高度、偏移及右侧绘制区域 |
-| 语义选区 | `message_area/selection.rs` | 拖拽选区与语义复制（`map_slice_to_semantic`，复制时剥视觉前缀） |
+| 语义选区 | `message_area/selection.rs` | 拖拽选区与语义复制（`map_slice_to_semantic`，复制时剥视觉前缀）；完整选中的中间逻辑行跳过折行测量，仅选区首尾恢复视觉列边界。折行测量借用 span 正文，复用 Ratatui Paragraph；`selection_grapheme_test.rs` 覆盖测量次数、Unicode 及样式一致性 |
 | 文本剪贴板 | `src/kit/clipboard.rs` + `clipboard_test.rs`、`src/kit/input_area/paste.rs` + `paste_test.rs` | `copy_text` 统一消息拖拽、错误原文、MCP 详情与 OAuth 链接复制。`select_channel` 选通道：`PERI_CLIPBOARD` 覆盖优先；SSH/herdr 或非 macOS 的 Unix 上无 `DISPLAY`/`WAYLAND_DISPLAY` 时走终端 OSC 52，其余走系统剪贴板（arboard）；主通道失败回落另一条通道。tmux 下同时发原生 OSC 52 与 `\ePtmux;` DCS 透传副本（两种 tmux 配置互不覆盖）。Ctrl+V 只读本机剪贴板：同一探测判定本机剪贴板非用户剪贴板且读不到内容时，提示改用终端原生粘贴（bracketed paste 不受影响），本机保持静默。终端写入无确认响应，发送成功不保证客户端已接受；外层终端需允许 OSC 52，tmux 还需 `set -g set-clipboard on`（原生路径，且客户端终端 terminfo 带 `Ms`）或 `set -g allow-passthrough on`（透传路径）。回归命令：`./scripts/cargo-rmcp-patched.sh test --locked -p peri-tui --lib -- kit::clipboard::tests`、`... -- input_area::paste::tests` |
 | markdown 渲染 | `markdown/`（convert.rs / list.rs / code_block.rs / table.rs / scan.rs） | 文本 → 带样式的行渲染；代码块、表格、扫描；列表项之间的空行范围由 `list.rs::LIST_ITEM_GAP_MAX_DEPTH` 单点控制（`None` 恢复紧凑） |
 | Markdown 解析测试 | `src/kit/markdown/{mod_test.rs,list_test.rs,cache_test.rs,table_parse_test.rs,wrap_test.rs,image_parse_test.rs,profile_test.rs}` | 按基本解析、列表项间距、增量缓存、表格、Unicode 折行、图片与显式 release profile 分组；统一过滤 `kit::markdown::`，profile 用例默认 ignored |
@@ -278,3 +278,6 @@ TUI 生产时间入口统一经 `peri-time`：`kit/entry.rs` 的每日主题以�
 - ARC-HOST-SHUTDOWN-001：TUI 不持有 MCP 池/`McpTaskOwner`（池归 ACP Host 部署）；`teardown_app` 显式关闭 AcpDeployment 并等待 host 收口，Incomplete 不记为已关闭
 
 并发子 Agent 展示归属遵守 `ARC-SUBAGENT-IDENTITY-001`：启动事件 `parent_tool_call_id` 必须是模型工具调用 ID，而非持久化 invocation UUID；TUI 不转换执行身份。三组同名、六种启动顺序与父卡片先到/后到的发布快照回归见 `acp_events_test/subagent_identity_test.rs::three_same_named_subagents_keep_distinct_owners_across_arrival_orders`。
+
+工具摘要由 `src/truncate.rs::truncate_text` 按预览预算定位字符边界，不先统计全文字符数；
+`summarize_input_by_name` 借用 JSON 字符串字段，仅物化最终摘要。回归见 `src/truncate_test.rs`。

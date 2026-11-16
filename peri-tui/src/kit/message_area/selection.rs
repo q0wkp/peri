@@ -9,7 +9,7 @@ use crate::kit::atoms::{COPY_CHAR_COUNT, COPY_MESSAGE_UNTIL};
 use crate::kit::message_area::grid::GridSpec;
 use crate::kit::text_selection::{self, SelectionAnchor, TextSelection};
 use ratatui_kit::ratatui::style::Style;
-use ratatui_kit::ratatui::text::Line;
+use ratatui_kit::ratatui::text::{Line, Span};
 use ratatui_kit::ratatui::widgets::{Paragraph, Wrap};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
@@ -26,6 +26,20 @@ pub(crate) struct WrappedLineInfo {
     pub(crate) slot_index: usize,
 }
 
+// Paragraph 没有借用 Line 的构造器；只复制 span 描述，避免测量时深拷贝正文。
+fn wrapped_paragraph<'a>(line: &'a Line<'_>) -> Paragraph<'a> {
+    Paragraph::new(Line {
+        spans: line
+            .spans
+            .iter()
+            .map(|span| Span::styled(span.content.as_ref(), span.style))
+            .collect(),
+        style: line.style,
+        alignment: line.alignment,
+    })
+    .wrap(Wrap { trim: false })
+}
+
 /// 为 all_lines 构建视觉行→逻辑行映射。
 /// 返回 (total_visual_rows, wrap_map)。wrap_map 按 visual_start 升序排列，可二分查找。
 pub(crate) fn build_wrap_map(lines: &[Line<'static>], width: u16) -> (usize, Vec<WrappedLineInfo>) {
@@ -37,9 +51,7 @@ pub(crate) fn build_wrap_map(lines: &[Line<'static>], width: u16) -> (usize, Vec
     let mut wrap_map = Vec::with_capacity(lines.len());
     let mut visual_row = 0usize;
     for (idx, line) in lines.iter().enumerate() {
-        let rows = Paragraph::new(ratatui_kit::ratatui::text::Text::from(line.clone()))
-            .wrap(Wrap { trim: false })
-            .line_count(width);
+        let rows = wrapped_paragraph(line).line_count(width);
         let rows = rows.max(1);
         wrap_map.push(WrappedLineInfo {
             logical_idx: idx,
@@ -236,6 +248,11 @@ pub(super) fn visual_to_logical(visual_row: usize, wrap_map: &[WrappedLineInfo])
 
 // ── 折行宽度模拟 ──────────────────────────────────────────────────────────
 
+#[cfg(test)]
+thread_local! {
+    static WRAP_BOUNDARY_MEASUREMENTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// 用 ratatui `Paragraph::wrap` 渲染 `Line` 到 offscreen `Buffer`，按 cell 流匹配
 /// plain text 字符，确定每个视觉行在该 plain text 中的 byte 起始偏移。
 ///
@@ -255,13 +272,14 @@ fn wrap_byte_starts(line: &Line<'_>, plain: &str, width: u16) -> Vec<usize> {
     use ratatui_kit::ratatui::layout::Rect;
     use ratatui_kit::ratatui::widgets::Widget;
 
+    #[cfg(test)]
+    WRAP_BOUNDARY_MEASUREMENTS.with(|count| count.set(count.get() + 1));
     let width = width.max(1);
     if plain.is_empty() {
         return vec![0];
     }
-    let line_count = Paragraph::new(ratatui_kit::ratatui::text::Text::from(line.clone()))
-        .wrap(Wrap { trim: false })
-        .line_count(width);
+    let paragraph = wrapped_paragraph(line);
+    let line_count = paragraph.line_count(width);
     if line_count <= 1 {
         return vec![0, plain.len()];
     }
@@ -273,9 +291,7 @@ fn wrap_byte_starts(line: &Line<'_>, plain: &str, width: u16) -> Vec<usize> {
     let height = u16::try_from(line_count).expect("line count checked against u16::MAX");
     let area = Rect::new(0, 0, width, height);
     let mut buf = Buffer::empty(area);
-    Paragraph::new(ratatui_kit::ratatui::text::Text::from(line.clone()))
-        .wrap(Wrap { trim: false })
-        .render(area, &mut buf);
+    paragraph.render(area, &mut buf);
 
     // 预计算字素簇的 byte 偏移表（与 ratatui 渲染/折行同一字素边界口径）。
     let graphemes: Vec<&str> = plain.graphemes(true).collect();
@@ -480,12 +496,15 @@ pub(super) fn highlight_line_in_selection(
     width: u16,
     sel_style: Style,
 ) -> Line<'static> {
+    let sr_in_line = sel_sr >= entry.visual_start && sel_sr < entry.visual_end;
+    let er_in_line = sel_er >= entry.visual_start && sel_er < entry.visual_end;
+    // 完整选中的中间逻辑行无需恢复视觉行边界，避免重复离屏绘制长行。
+    if !sr_in_line && !er_in_line {
+        return split_line_spans_by_byte_range(line, 0, usize::MAX, sel_style);
+    }
     let plain = text_selection::line_to_plain_text(line);
     let row_starts = wrap_byte_starts(line, &plain, width);
     let row_max = row_starts.len().saturating_sub(1);
-
-    let sr_in_line = sel_sr >= entry.visual_start && sel_sr < entry.visual_end;
-    let er_in_line = sel_er >= entry.visual_start && sel_er < entry.visual_end;
 
     // sr_off / er_off 是选区起点/终点视觉行相对该逻辑行 visual_start 的偏移
     let sr_off = sel_sr.saturating_sub(entry.visual_start).min(row_max);
@@ -527,46 +546,37 @@ fn split_line_spans_by_byte_range(
     b_end: usize,
     sel_style: Style,
 ) -> Line<'static> {
-    use ratatui_kit::ratatui::text::Span;
-
     let mut cur = 0usize;
-    let spans: Vec<Span<'static>> = line
-        .spans
-        .iter()
-        .flat_map(|s| {
-            let len = s.content.len();
-            let end = cur + len;
-            let overlap_start = cur.max(b_start);
-            let overlap_end = end.min(b_end);
-            let base = cur;
-            cur = end;
-
-            if overlap_start >= overlap_end {
-                vec![Span::styled(s.content.clone(), s.style)]
-            } else if overlap_start == base && overlap_end == end {
-                vec![Span::styled(s.content.clone(), s.style.patch(sel_style))]
-            } else {
-                let mut parts: Vec<Span<'static>> = Vec::new();
-                let raw: &str = s.content.as_ref();
-                if overlap_start > base {
-                    parts.push(Span::styled(
-                        raw[..overlap_start - base].to_string(),
-                        s.style,
-                    ));
-                }
-                let mid_start = overlap_start - base;
-                let mid_end = overlap_end - base;
-                parts.push(Span::styled(
-                    raw[mid_start..mid_end].to_string(),
-                    s.style.patch(sel_style),
-                ));
-                if overlap_end < end {
-                    parts.push(Span::styled(raw[mid_end..].to_string(), s.style));
-                }
-                parts
+    let mut spans = Vec::with_capacity(line.spans.len().saturating_add(2));
+    for span in &line.spans {
+        let raw = span.content.as_ref();
+        let base = cur;
+        let end = base + raw.len();
+        cur = end;
+        let overlap_start = base.max(b_start);
+        let overlap_end = end.min(b_end);
+        if overlap_start >= overlap_end {
+            spans.push(span.clone());
+        } else if overlap_start == base && overlap_end == end {
+            spans.push(Span::styled(
+                span.content.clone(),
+                span.style.patch(sel_style),
+            ));
+        } else {
+            let mid_start = overlap_start - base;
+            let mid_end = overlap_end - base;
+            if mid_start > 0 {
+                spans.push(Span::styled(raw[..mid_start].to_string(), span.style));
             }
-        })
-        .collect();
+            spans.push(Span::styled(
+                raw[mid_start..mid_end].to_string(),
+                span.style.patch(sel_style),
+            ));
+            if mid_end < raw.len() {
+                spans.push(Span::styled(raw[mid_end..].to_string(), span.style));
+            }
+        }
+    }
     Line::from(spans)
 }
 
@@ -682,6 +692,14 @@ pub(super) fn extract_visual_range_index(
                 let p = plain.find(sem.as_str()).unwrap_or(0);
                 (sem, p)
             });
+        // 中间逻辑行全部复制，只有选区首尾需要恢复精确的视觉列边界。
+        if li != first && li != last {
+            parts.push(match semantic {
+                Some((sem, _)) => sem,
+                None => plain,
+            });
+            continue;
+        }
         // 每个视觉行在该逻辑行 plain text 中的 byte 起始偏移
         let row_starts = wrap_byte_starts(line, &plain, width);
         // 把视觉行号 clamp 到 row_starts 索引范围内（防御：footer 区域等异常 sr/er）
@@ -709,12 +727,6 @@ pub(super) fn extract_visual_range_index(
             let e_row_byte = row_starts[er_off];
             let b1 = row_end_byte(&plain, e_row_byte, ec);
             parts.push(map_slice_to_semantic(&plain, 0, b1, &semantic));
-        } else {
-            // 中间行（完整选择）：直接用语义全文
-            match &semantic {
-                Some((sem, _)) => parts.push(sem.clone()),
-                None => parts.push(plain),
-            }
         }
     }
     if parts.is_empty() {
