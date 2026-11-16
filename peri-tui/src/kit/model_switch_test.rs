@@ -3,7 +3,8 @@
 
 use super::send;
 use crate::acp_client::AcpTuiClient;
-use crate::kit::atoms::{NOTIFICATION, Notification};
+use crate::kit::atoms::NOTIFICATION;
+use crate::kit::test_support::NotificationGuard;
 use peri_acp::transport::{
     AcpTransport,
     mpsc::mpsc_transport_pair,
@@ -12,21 +13,6 @@ use peri_acp::transport::{
 use serde_json::json;
 use serial_test::serial;
 use std::time::Duration;
-
-/// 全局提示的保存/恢复——断言失败也不污染其它用例。
-struct NotificationGuard(Option<Notification>);
-
-impl NotificationGuard {
-    fn install() -> Self {
-        Self(std::mem::take(&mut *NOTIFICATION.state().write()))
-    }
-}
-
-impl Drop for NotificationGuard {
-    fn drop(&mut self) {
-        *NOTIFICATION.state().write() = self.0.take();
-    }
-}
 
 /// 以给定宿主回复发起切换，最多等待 `wait` 观察提示；没有提示返回 `None`。
 async fn switch_with_host_reply(
