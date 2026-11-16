@@ -431,6 +431,47 @@ fn request_contract_preserves_system_cache_thinking_and_tool_result_order() {
 }
 
 #[test]
+fn official_anthropic_omits_non_spec_tool_result_id() {
+    let request = tool_result_request();
+    let body = body_for_test(&config(), &request);
+    let block = &body["messages"][2]["content"][0];
+    assert_eq!(block["type"], "tool_result");
+    assert_eq!(block["tool_use_id"], "call-a");
+    assert!(
+        block.get("id").is_none(),
+        "官方 Anthropic 拒绝 tool_result.id: {block}"
+    );
+}
+
+#[test]
+fn glm_compatible_endpoint_keeps_tool_result_id() {
+    let config = AnthropicConfig::new(
+        Url::parse("https://open.bigmodel.cn/api/anthropic").expect("valid endpoint"),
+        "test-credential",
+        "glm-5.3",
+    );
+    let body = body_for_test(&config, &tool_result_request());
+    let block = &body["messages"][2]["content"][0];
+    assert_eq!(block["id"], "call-a");
+    assert_eq!(block["tool_use_id"], "call-a");
+}
+
+fn tool_result_request() -> ModelRequest {
+    ModelRequest::new(vec![
+        ModelMessage::user_text("check the file"),
+        ModelMessage::assistant(
+            vec![],
+            vec![ToolCall::new(
+                "call-a",
+                "Read",
+                JsonObject::from_value(json!({ "path": "a.rs" })).expect("object"),
+            )],
+        ),
+        ModelMessage::tool_result(ToolResult::success("call-a", "Read", "a")),
+    ])
+}
+
+#[test]
 fn sonnet_5_5_uses_adaptive_thinking_and_preserves_effort() {
     for effort in ["low", "medium", "high", "xhigh", "max"] {
         let mut config = config().with_extended_thinking(10_000, effort);
