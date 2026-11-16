@@ -210,8 +210,12 @@ fn into_model_anthropic_small_manual_config_budget_stays_disabled_after_request_
                 .expect("prepare_request 必须成功");
             let body = prepared.body().as_value();
             assert_eq!(body["max_tokens"], serde_json::json!(64_000));
+            // 配置上限放不下手动预算：只省略 thinking，effort 照常发送。
             assert!(body.get("thinking").is_none());
-            assert!(body.get("output_config").is_none());
+            assert_eq!(
+                body["output_config"],
+                serde_json::json!({ "effort": "high" })
+            );
         }
     }
 }
@@ -305,7 +309,10 @@ fn workflow_output_limit_disables_invalid_anthropic_thinking_budget() {
 
     assert_eq!(body["max_tokens"], serde_json::json!(1_024));
     assert!(body.get("thinking").is_none());
-    assert!(body.get("output_config").is_none());
+    assert_eq!(
+        body["output_config"],
+        serde_json::json!({ "effort": "high" })
+    );
 }
 
 #[test]

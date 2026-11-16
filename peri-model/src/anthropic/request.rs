@@ -145,8 +145,16 @@ pub(super) fn build_request(
                 })
             })
         };
+        // effort 不依赖 thinking：上面的门限只为满足 thinking 块的 API 约束，不能让用户
+        // 配置的 effort 随之消失。Verbatim 兼容端点（DeepSeek）没有证据表明接受单独的
+        // `output_config`，保持原规则随 thinking 一起省略；空 effort 表示没有配置，同样
+        // 不单独发送。
+        let send_effort = thinking.is_some()
+            || (replay == ThinkingReplay::Signed && !config.thinking_effort.trim().is_empty());
         if let Some(thinking) = thinking {
             body["thinking"] = thinking;
+        }
+        if send_effort {
             body["output_config"] = json!({ "effort": config.thinking_effort });
         }
     }

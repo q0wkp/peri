@@ -70,9 +70,9 @@ fn old_history_without_thinking_is_not_filled_with_fake_blocks() {
     );
     assert!(!body.to_string().contains("\"signature\":\"\""));
     // 手动 thinking 要求最后的 assistant turn 以带签名的 thinking 块开始；
-    // 旧历史无法满足时按官方建议不启用 thinking。
+    // 旧历史无法满足时按官方建议不启用 thinking，但 effort 不受该约束，照常发送。
     assert!(body.get("thinking").is_none());
-    assert!(body.get("output_config").is_none());
+    assert_eq!(body["output_config"], json!({ "effort": "high" }));
 }
 
 #[test]
@@ -350,9 +350,9 @@ fn manual_thinking_ignores_signed_thinking_from_previous_turns() {
     .with_max_tokens(2_048);
 
     let body = body_for_test(&config().with_extended_thinking(1_024, "high"), &request);
-    // 上一个 turn 的签名 thinking 不能冒充当前 turn 的起点。
+    // 上一个 turn 的签名 thinking 不能冒充当前 turn 的起点；effort 仍然发送。
     assert!(body.get("thinking").is_none());
-    assert!(body.get("output_config").is_none());
+    assert_eq!(body["output_config"], json!({ "effort": "high" }));
 }
 
 fn config_with_retry(max_attempts: u32) -> AnthropicConfig {
@@ -538,8 +538,9 @@ fn legacy_model_preserves_manual_budget_clamp_and_minimum() {
             );
             assert_eq!(body["output_config"], json!({ "effort": "xhigh" }));
         } else {
+            // 预算放不下时只省略 thinking，effort 照常发送。
             assert!(body.get("thinking").is_none());
-            assert!(body.get("output_config").is_none());
+            assert_eq!(body["output_config"], json!({ "effort": "xhigh" }));
         }
     }
 }
@@ -611,7 +612,7 @@ fn request_budget_below_thinking_minimum_disables_thinking() {
     );
     assert_eq!(body["max_tokens"], 1_024);
     assert!(body.get("thinking").is_none());
-    assert!(body.get("output_config").is_none());
+    assert_eq!(body["output_config"], json!({ "effort": "max" }));
 }
 
 /// thinking 预算要为正文预留空间；请求上限不足时按可用额度收缩。
@@ -634,6 +635,74 @@ fn request_budget_below_thinking_plus_reserve_disables_thinking() {
         &config().with_extended_thinking(10_000, "max"),
         &request().with_max_tokens(1_536),
     );
+    assert!(body.get("thinking").is_none());
+    assert_eq!(body["output_config"], json!({ "effort": "max" }));
+}
+
+/// 当前 turn 起点没有带签名 thinking（上一轮只回了文本）。
+fn history_without_signed_thinking() -> ModelRequest {
+    ModelRequest::new(vec![
+        ModelMessage::user_text("first question"),
+        ModelMessage::assistant(vec![ContentBlock::text("checking")], vec![]),
+        ModelMessage::user_text("second question"),
+    ])
+    .with_max_tokens(64_000)
+}
+
+/// [回归测试] 手动 thinking 因签名门限被省略时，effort 不能随之消失：门限只为满足
+/// thinking 块的 API 约束，用户配置的 effort 每一轮都要发出去。
+#[test]
+fn effort_is_sent_when_signed_thinking_gate_omits_thinking() {
+    for model in ["claude-sonnet-4-6", "custom-alias"] {
+        let mut config = config().with_extended_thinking(10_000, "medium");
+        config.model = model.into();
+        let body = body_for_test(&config, &history_without_signed_thinking());
+        assert!(body.get("thinking").is_none(), "{model}");
+        assert_eq!(
+            body["output_config"],
+            json!({ "effort": "medium" }),
+            "{model}"
+        );
+    }
+}
+
+/// [回归测试] opus-5-5 / fable-5-2 在上一轮没有签名 thinking 时仍带 effort。thinking
+/// 模式由 `uses_adaptive_thinking` 决定，这里只断言 effort，与该判定的演进无关。
+#[test]
+fn effort_reaches_the_wire_for_new_models_without_signed_thinking_history() {
+    for model in ["claude-opus-5-5", "claude-fable-5-2"] {
+        for effort in ["low", "medium", "high", "xhigh", "max"] {
+            let mut config = config().with_extended_thinking(10_000, effort);
+            config.model = model.into();
+            let body = body_for_test(&config, &history_without_signed_thinking());
+            assert_eq!(body["model"], model);
+            assert_eq!(
+                body["output_config"],
+                json!({ "effort": effort }),
+                "{model}"
+            );
+        }
+    }
+}
+
+/// DeepSeek 等 Verbatim 兼容端点把 effort 当作 thinking 模式的参数，没有证据表明它们
+/// 接受单独的 `output_config`：thinking 因预算被省略时仍按原规则一并省略。
+#[test]
+fn verbatim_compatible_endpoint_keeps_effort_bound_to_thinking() {
+    let body = body_for_test(
+        &deepseek_config().with_extended_thinking(10_000, "max"),
+        &request().with_max_tokens(1_024),
+    );
+    assert!(body.get("thinking").is_none());
+    assert!(body.get("output_config").is_none());
+}
+
+/// effort 为空表示没有配置：thinking 被省略时不单独发送空的 `output_config`。
+#[test]
+fn empty_effort_is_not_sent_when_thinking_is_omitted() {
+    let mut config = config().with_extended_thinking(10_000, "");
+    config.model = "claude-sonnet-4-6".into();
+    let body = body_for_test(&config, &history_without_signed_thinking());
     assert!(body.get("thinking").is_none());
     assert!(body.get("output_config").is_none());
 }
