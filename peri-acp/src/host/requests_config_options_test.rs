@@ -19,6 +19,12 @@ fn live_config() -> PeriConfig {
     config
 }
 
+/// 生产里权威快照与磁盘一致；会话级选项以快照为落盘基线，夹具必须先写入同一份配置。
+fn seed_authority(cfg: &AcpServerConfig, config: &PeriConfig) {
+    crate::provider::save_to(config, cfg.config_source.global_path()).unwrap();
+    cfg.config_source.reload_merged().unwrap();
+}
+
 fn seeded_sessions(provider: &LlmProvider) -> HashMap<String, SessionState> {
     let mut agent_pool = AgentPool::new();
     let model: Arc<dyn peri_model::Model> = Arc::from(provider.clone().into_model());
@@ -70,6 +76,7 @@ async fn assert_persistence_failure_is_atomic(
     let config = live_config();
     let provider = LlmProvider::from_config(&config).unwrap();
     let cfg = make_server_config(config.clone(), provider.clone(), &temporary).await;
+    seed_authority(&cfg, &config);
     let revision = cfg.config_source.snapshot().unwrap().revision();
     let mut sessions = seeded_sessions(&provider);
     let cached = sessions["session"]
@@ -86,7 +93,10 @@ async fn assert_persistence_failure_is_atomic(
         PersistenceFailure::Conflict => {
             std::fs::write(path, r#"{"config":{"language":"external"}}"#).unwrap();
         }
-        PersistenceFailure::Io => std::fs::create_dir(path).unwrap(),
+        PersistenceFailure::Io => {
+            std::fs::remove_file(path).unwrap();
+            std::fs::create_dir(path).unwrap();
+        }
     }
     let error = if update {
         let mut candidate = config.clone();
@@ -184,6 +194,7 @@ async fn successful_options_persist_before_publishing_and_invalidate_cache() {
         let config = live_config();
         let provider = LlmProvider::from_config(&config).unwrap();
         let cfg = make_server_config(config.clone(), provider.clone(), &temporary).await;
+        seed_authority(&cfg, &config);
         let mut sessions = seeded_sessions(&provider);
         let mock = Arc::new(MockTransport::default());
         let transport: Arc<dyn crate::transport::AcpTransport> = mock.clone();

@@ -14,13 +14,18 @@ use crate::dispatch::config_update::make_config_options;
 use crate::provider::LlmProvider;
 use crate::transport::types::AcpError;
 
+fn authority_snapshot(
+    cfg: &AcpServerConfig,
+) -> Result<Arc<peri_config::ConfigurationSnapshot>, AcpError> {
+    cfg.config_source
+        .snapshot()
+        .ok_or_else(|| AcpError::new(-32603, "Configuration authority unavailable"))
+}
+
 fn expected_revision(
     cfg: &AcpServerConfig,
 ) -> Result<peri_config::ConfigurationRevision, AcpError> {
-    cfg.config_source
-        .snapshot()
-        .map(|snapshot| snapshot.revision())
-        .ok_or_else(|| AcpError::new(-32603, "Configuration authority unavailable"))
+    authority_snapshot(cfg).map(|snapshot| snapshot.revision())
 }
 
 pub(crate) async fn handle_set_mode(
@@ -47,11 +52,11 @@ pub(crate) async fn handle_set_config_option(
     sessions: &mut HashMap<String, SessionState>,
     transport: &Arc<dyn crate::transport::AcpTransport>,
 ) -> Result<Value, AcpError> {
-    let revision = if matches!(
+    let snapshot = if matches!(
         params.get("configId").and_then(Value::as_str),
         Some("model" | "thinking_effort" | "context_1m")
     ) {
-        Some(expected_revision(cfg)?)
+        Some(authority_snapshot(cfg)?)
     } else {
         None
     };
@@ -68,7 +73,13 @@ pub(crate) async fn handle_set_config_option(
             info!(mode = %value, "Permission mode changed via configOption");
         }
         "model" | "thinking_effort" | "context_1m" => {
-            let candidate = parking_lot::RwLock::new(cfg.peri_config.read().clone());
+            let snapshot = snapshot.expect("persistent option has an authority snapshot");
+            // 基线取权威快照，只保留本会话自己的档位选择：会话持有的 `peri_config`
+            // 是创建时的副本，Model 面板与外部编辑不会写进去，拿它整份落盘会把已保存
+            // 的 effort / 模型名覆盖回旧值。
+            let mut baseline = snapshot.settings().clone();
+            baseline.config.active_alias = cfg.peri_config.read().config.active_alias.clone();
+            let candidate = parking_lot::RwLock::new(baseline);
             match config_id {
                 "model" => candidate.write().config.active_alias = value.to_owned(),
                 "thinking_effort" => apply_profile_effort(&candidate, value),
@@ -96,10 +107,7 @@ pub(crate) async fn handle_set_config_option(
                     })?;
             let accepted = cfg
                 .config_source
-                .save(
-                    revision.expect("persistent option has a revision"),
-                    &candidate,
-                )
+                .save(snapshot.revision(), &candidate)
                 .map_err(|_| AcpError::new(-32603, "Failed to persist config"))?;
             *cfg.peri_config.write() = accepted.settings().clone();
             *cfg.provider.write() = accepted
