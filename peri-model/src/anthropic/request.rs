@@ -68,12 +68,23 @@ impl ThinkingReplay {
     }
 }
 
+/// GLM/Zhipu 的 Anthropic 兼容网关会对所有 content block 统一读取 `id`，
+/// tool_result 缺失时返回 500；官方 Anthropic 则严格拒绝该非规范字段。
+fn requires_tool_result_id(endpoint: &Url) -> bool {
+    let host = endpoint.host_str().unwrap_or_default().to_ascii_lowercase();
+    host == "bigmodel.cn" || host.ends_with(".bigmodel.cn")
+}
+
 pub(super) fn build_request(
     config: &AnthropicConfig,
     request: &ModelRequest,
 ) -> ModelResult<BuiltAnthropicRequest> {
     let replay = ThinkingReplay::for_endpoint(&config.endpoint, &config.model);
-    let (mut messages, mut system_prompt) = messages_to_anthropic(&request.messages, replay);
+    // 官方 Anthropic 严格拒绝 tool_result 上的非规范 `id`（HTTP 400
+    // `Extra inputs are not permitted`）；只有明确要求该字段的兼容网关才发送。
+    let include_tool_result_id = requires_tool_result_id(&config.endpoint);
+    let (mut messages, mut system_prompt) =
+        messages_to_anthropic(&request.messages, replay, include_tool_result_id);
     if replay == ThinkingReplay::Verbatim {
         // DeepSeek 等兼容端点要求 thinking 模式下的历史 assistant 消息携带 thinking 块，
         // 且不校验输入 signature；缺块时用空 thinking 占位补齐。占位须在 cache 处理前插入。
@@ -134,8 +145,16 @@ pub(super) fn build_request(
                 })
             })
         };
+        // effort 不依赖 thinking：上面的门限只为满足 thinking 块的 API 约束，不能让用户
+        // 配置的 effort 随之消失。Verbatim 兼容端点（DeepSeek）没有证据表明接受单独的
+        // `output_config`，保持原规则随 thinking 一起省略；空 effort 表示没有配置，同样
+        // 不单独发送。
+        let send_effort = thinking.is_some()
+            || (replay == ThinkingReplay::Signed && !config.thinking_effort.trim().is_empty());
         if let Some(thinking) = thinking {
             body["thinking"] = thinking;
+        }
+        if send_effort {
             body["output_config"] = json!({ "effort": config.thinking_effort });
         }
     }
@@ -171,6 +190,7 @@ pub(super) fn messages_endpoint(endpoint: &Url) -> ModelResult<Url> {
 fn messages_to_anthropic(
     messages: &[ModelMessage],
     replay: ThinkingReplay,
+    include_tool_result_id: bool,
 ) -> (Vec<Value>, cache::SplitSystemPrompt) {
     let mut system = Vec::new();
     let mut result = Vec::new();
@@ -185,13 +205,13 @@ fn messages_to_anthropic(
             }
             ModelMessage::User { content } => result.push(json!({
                 "role": "user",
-                "content": content_to_anthropic(content, replay),
+                "content": content_to_anthropic(content, replay, include_tool_result_id),
             })),
             ModelMessage::Assistant {
                 content,
                 tool_calls,
             } => {
-                let mut parts = content_to_anthropic_parts(content, replay);
+                let mut parts = content_to_anthropic_parts(content, replay, include_tool_result_id);
                 let content_tool_use_ids = content
                     .iter()
                     .filter_map(|block| match block {
@@ -210,7 +230,7 @@ fn messages_to_anthropic(
             ModelMessage::ToolResult {
                 result: tool_result,
             } => {
-                let block = tool_result_to_anthropic(tool_result, replay);
+                let block = tool_result_to_anthropic(tool_result, replay, include_tool_result_id);
                 let appended = result.last_mut().is_some_and(|message: &mut Value| {
                     if message["role"] != "user" {
                         return false;
@@ -247,14 +267,24 @@ fn tool_call_to_anthropic(tool_call: &ToolCall) -> Value {
     })
 }
 
-fn tool_result_to_anthropic(result: &ToolResult, replay: ThinkingReplay) -> Value {
-    json!({
+fn tool_result_to_anthropic(
+    result: &ToolResult,
+    replay: ThinkingReplay,
+    include_id: bool,
+) -> Value {
+    let mut block = json!({
         "type": "tool_result",
-        "id": result.id.clone().unwrap_or_else(|| result.tool_call_id.clone()),
         "tool_use_id": result.tool_call_id,
-        "content": content_to_anthropic(&result.content, replay),
+        "content": content_to_anthropic(&result.content, replay, include_id),
         "is_error": result.is_error,
-    })
+    });
+    if include_id {
+        block["id"] = json!(result
+            .id
+            .clone()
+            .unwrap_or_else(|| result.tool_call_id.clone()));
+    }
+    block
 }
 
 fn content_text(content: &[ContentBlock]) -> String {
@@ -264,11 +294,23 @@ fn content_text(content: &[ContentBlock]) -> String {
         .collect()
 }
 
-fn content_to_anthropic(content: &[ContentBlock], replay: ThinkingReplay) -> Value {
-    Value::Array(content_to_anthropic_parts(content, replay))
+fn content_to_anthropic(
+    content: &[ContentBlock],
+    replay: ThinkingReplay,
+    include_tool_result_id: bool,
+) -> Value {
+    Value::Array(content_to_anthropic_parts(
+        content,
+        replay,
+        include_tool_result_id,
+    ))
 }
 
-fn content_to_anthropic_parts(content: &[ContentBlock], replay: ThinkingReplay) -> Vec<Value> {
+fn content_to_anthropic_parts(
+    content: &[ContentBlock],
+    replay: ThinkingReplay,
+    include_tool_result_id: bool,
+) -> Vec<Value> {
     let foreign_replay = content
         .iter()
         .any(|block| matches!(block, ContentBlock::ProviderState { .. }));
@@ -283,14 +325,37 @@ fn content_to_anthropic_parts(content: &[ContentBlock], replay: ThinkingReplay) 
             {
                 (!text.is_empty()).then(|| json!({ "type": "text", "text": text }))
             }
-            _ => block_to_anthropic(block, replay),
+            _ => block_to_anthropic(block, replay, include_tool_result_id),
         })
         .collect()
 }
 
-/// 已确认只支持 adaptive thinking、拒绝手动 `enabled` 的精确模型。
+/// 已确认只接受 adaptive thinking、拒绝手动 `enabled` 的模型。
+///
+/// Claude 4.7 及之后（含所有 Claude 5+ 家族：opus/sonnet/haiku/fable/mythos）
+/// 已移除手动 `thinking: {"type":"enabled"}`，请求必须改为 `adaptive`。
+/// 这里只识别新的 `<family>-<major>[-.]<minor>` 命名；旧式 `claude-3-7-sonnet`
+/// 等仍属于仅支持手动 thinking 的模型。
 fn uses_adaptive_thinking(model: &str) -> bool {
-    model == "claude-sonnet-5-5"
+    let model = model.to_ascii_lowercase();
+    let Some((_, rest)) = model.split_once("claude-") else {
+        return false;
+    };
+    let Some((family, version)) = rest.split_once('-') else {
+        return false;
+    };
+    if !matches!(family, "opus" | "sonnet" | "haiku" | "fable" | "mythos") {
+        return false;
+    }
+    let mut parts = version.split(['-', '.']);
+    let Some(major) = parts.next().and_then(|part| part.parse::<u32>().ok()) else {
+        return false;
+    };
+    let minor = parts
+        .next()
+        .and_then(|part| part.parse::<u32>().ok())
+        .unwrap_or(0);
+    major > 4 || (major == 4 && minor >= 7)
 }
 
 fn has_replay_signature(signature: &Option<String>) -> bool {
@@ -345,7 +410,11 @@ fn is_replay_thinking_block(block: &Value) -> bool {
     }
 }
 
-fn block_to_anthropic(block: &ContentBlock, replay: ThinkingReplay) -> Option<Value> {
+fn block_to_anthropic(
+    block: &ContentBlock,
+    replay: ThinkingReplay,
+    include_tool_result_id: bool,
+) -> Option<Value> {
     match block {
         ContentBlock::Text { text } => Some(json!({ "type": "text", "text": text })),
         ContentBlock::Image { source } => match source {
@@ -376,7 +445,11 @@ fn block_to_anthropic(block: &ContentBlock, replay: ThinkingReplay) -> Option<Va
             Some(value)
         }
         ContentBlock::ToolUse { tool_call } => Some(tool_call_to_anthropic(tool_call)),
-        ContentBlock::ToolResult { result } => Some(tool_result_to_anthropic(result, replay)),
+        ContentBlock::ToolResult { result } => Some(tool_result_to_anthropic(
+            result,
+            replay,
+            include_tool_result_id,
+        )),
         ContentBlock::RedactedReasoning { data } => Some(json!({
             "type": "redacted_thinking",
             "data": data,

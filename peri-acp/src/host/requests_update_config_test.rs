@@ -3,6 +3,9 @@ use super::*;
 #[path = "requests_config_options_test.rs"]
 mod config_options_tests;
 
+#[path = "requests_session_profile_test.rs"]
+mod session_profile_tests;
+
 /// [回归测试] sessionless setup 更新同一 provider ID 后，现有会话实际使用新连接，
 /// 保留独立 profile 与冻结 prompt，其他工作区的环境和缓存不变。
 #[tokio::test]

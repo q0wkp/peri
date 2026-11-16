@@ -1438,6 +1438,7 @@ session-creation-failed = 会话创建失败：{ $error }
 panel-host-settings = 宿主配置
 
 permission-mode-update-failed = 权限模式更新失败：{ $error }
+model-switch-failed = 模型切换失败：{ $error }
 setup-activation-failed = 设置已保存，但未能在当前运行中启用。请按 Enter 重试。
 setup-saving = 正在保存并启用设置…
 setup-connectivity-checking = 正在检查端点…

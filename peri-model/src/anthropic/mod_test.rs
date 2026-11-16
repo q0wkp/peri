@@ -70,9 +70,9 @@ fn old_history_without_thinking_is_not_filled_with_fake_blocks() {
     );
     assert!(!body.to_string().contains("\"signature\":\"\""));
     // 手动 thinking 要求最后的 assistant turn 以带签名的 thinking 块开始；
-    // 旧历史无法满足时按官方建议不启用 thinking。
+    // 旧历史无法满足时按官方建议不启用 thinking，但 effort 不受该约束，照常发送。
     assert!(body.get("thinking").is_none());
-    assert!(body.get("output_config").is_none());
+    assert_eq!(body["output_config"], json!({ "effort": "high" }));
 }
 
 #[test]
@@ -350,9 +350,9 @@ fn manual_thinking_ignores_signed_thinking_from_previous_turns() {
     .with_max_tokens(2_048);
 
     let body = body_for_test(&config().with_extended_thinking(1_024, "high"), &request);
-    // 上一个 turn 的签名 thinking 不能冒充当前 turn 的起点。
+    // 上一个 turn 的签名 thinking 不能冒充当前 turn 的起点；effort 仍然发送。
     assert!(body.get("thinking").is_none());
-    assert!(body.get("output_config").is_none());
+    assert_eq!(body["output_config"], json!({ "effort": "high" }));
 }
 
 fn config_with_retry(max_attempts: u32) -> AnthropicConfig {
@@ -431,6 +431,47 @@ fn request_contract_preserves_system_cache_thinking_and_tool_result_order() {
 }
 
 #[test]
+fn official_anthropic_omits_non_spec_tool_result_id() {
+    let request = tool_result_request();
+    let body = body_for_test(&config(), &request);
+    let block = &body["messages"][2]["content"][0];
+    assert_eq!(block["type"], "tool_result");
+    assert_eq!(block["tool_use_id"], "call-a");
+    assert!(
+        block.get("id").is_none(),
+        "官方 Anthropic 拒绝 tool_result.id: {block}"
+    );
+}
+
+#[test]
+fn glm_compatible_endpoint_keeps_tool_result_id() {
+    let config = AnthropicConfig::new(
+        Url::parse("https://open.bigmodel.cn/api/anthropic").expect("valid endpoint"),
+        "test-credential",
+        "glm-5.3",
+    );
+    let body = body_for_test(&config, &tool_result_request());
+    let block = &body["messages"][2]["content"][0];
+    assert_eq!(block["id"], "call-a");
+    assert_eq!(block["tool_use_id"], "call-a");
+}
+
+fn tool_result_request() -> ModelRequest {
+    ModelRequest::new(vec![
+        ModelMessage::user_text("check the file"),
+        ModelMessage::assistant(
+            vec![],
+            vec![ToolCall::new(
+                "call-a",
+                "Read",
+                JsonObject::from_value(json!({ "path": "a.rs" })).expect("object"),
+            )],
+        ),
+        ModelMessage::tool_result(ToolResult::success("call-a", "Read", "a")),
+    ])
+}
+
+#[test]
 fn sonnet_5_5_uses_adaptive_thinking_and_preserves_effort() {
     for effort in ["low", "medium", "high", "xhigh", "max"] {
         let mut config = config().with_extended_thinking(10_000, effort);
@@ -497,20 +538,21 @@ fn legacy_model_preserves_manual_budget_clamp_and_minimum() {
             );
             assert_eq!(body["output_config"], json!({ "effort": "xhigh" }));
         } else {
+            // 预算放不下时只省略 thinking，effort 照常发送。
             assert!(body.get("thinking").is_none());
-            assert!(body.get("output_config").is_none());
+            assert_eq!(body["output_config"], json!({ "effort": "xhigh" }));
         }
     }
 }
 
 #[test]
-fn unknown_models_and_aliases_keep_manual_thinking() {
+fn unknown_models_and_legacy_aliases_keep_manual_thinking() {
     for model in [
         "custom-sonnet-alias",
-        "claude-sonnet-5-5-latest",
-        "claude-sonnet-5-5-20261029",
-        "vendor/claude-sonnet-5-5",
-        "claude-sonnet-5.5",
+        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
+        "vendor/claude-sonnet-4-5",
+        "claude-3-7-sonnet-latest",
     ] {
         let mut config = config().with_extended_thinking(10_000, "high");
         config.model = model.into();
@@ -521,6 +563,31 @@ fn unknown_models_and_aliases_keep_manual_thinking() {
             json!({ "type": "enabled", "budget_tokens": 10_000 })
         );
         assert_eq!(body["output_config"], json!({ "effort": "high" }));
+    }
+}
+
+#[test]
+fn claude_47_and_later_use_adaptive_thinking() {
+    for model in [
+        "claude-opus-4-7",
+        "claude-opus-4-8",
+        "anthropic.claude-opus-4.8",
+        "claude-sonnet-5",
+        "claude-sonnet-5-5",
+        "claude-sonnet-5.5",
+        "claude-sonnet-5-5-latest",
+        "claude-sonnet-5-5-20261029",
+        "vendor/claude-opus-5-5",
+        "claude-haiku-5-5",
+        "claude-fable-5-2",
+        "claude-mythos-5",
+    ] {
+        let mut config = config().with_extended_thinking(10_000, "xhigh");
+        config.model = model.into();
+        let body = body_for_test(&config, &ModelRequest::default());
+        assert_eq!(body["model"], model);
+        assert_eq!(body["thinking"], json!({ "type": "adaptive" }));
+        assert_eq!(body["output_config"], json!({ "effort": "xhigh" }));
     }
 }
 
@@ -545,7 +612,7 @@ fn request_budget_below_thinking_minimum_disables_thinking() {
     );
     assert_eq!(body["max_tokens"], 1_024);
     assert!(body.get("thinking").is_none());
-    assert!(body.get("output_config").is_none());
+    assert_eq!(body["output_config"], json!({ "effort": "max" }));
 }
 
 /// thinking 预算要为正文预留空间；请求上限不足时按可用额度收缩。
@@ -568,6 +635,74 @@ fn request_budget_below_thinking_plus_reserve_disables_thinking() {
         &config().with_extended_thinking(10_000, "max"),
         &request().with_max_tokens(1_536),
     );
+    assert!(body.get("thinking").is_none());
+    assert_eq!(body["output_config"], json!({ "effort": "max" }));
+}
+
+/// 当前 turn 起点没有带签名 thinking（上一轮只回了文本）。
+fn history_without_signed_thinking() -> ModelRequest {
+    ModelRequest::new(vec![
+        ModelMessage::user_text("first question"),
+        ModelMessage::assistant(vec![ContentBlock::text("checking")], vec![]),
+        ModelMessage::user_text("second question"),
+    ])
+    .with_max_tokens(64_000)
+}
+
+/// [回归测试] 手动 thinking 因签名门限被省略时，effort 不能随之消失：门限只为满足
+/// thinking 块的 API 约束，用户配置的 effort 每一轮都要发出去。
+#[test]
+fn effort_is_sent_when_signed_thinking_gate_omits_thinking() {
+    for model in ["claude-sonnet-4-6", "custom-alias"] {
+        let mut config = config().with_extended_thinking(10_000, "medium");
+        config.model = model.into();
+        let body = body_for_test(&config, &history_without_signed_thinking());
+        assert!(body.get("thinking").is_none(), "{model}");
+        assert_eq!(
+            body["output_config"],
+            json!({ "effort": "medium" }),
+            "{model}"
+        );
+    }
+}
+
+/// [回归测试] opus-5-5 / fable-5-2 在上一轮没有签名 thinking 时仍带 effort。thinking
+/// 模式由 `uses_adaptive_thinking` 决定，这里只断言 effort，与该判定的演进无关。
+#[test]
+fn effort_reaches_the_wire_for_new_models_without_signed_thinking_history() {
+    for model in ["claude-opus-5-5", "claude-fable-5-2"] {
+        for effort in ["low", "medium", "high", "xhigh", "max"] {
+            let mut config = config().with_extended_thinking(10_000, effort);
+            config.model = model.into();
+            let body = body_for_test(&config, &history_without_signed_thinking());
+            assert_eq!(body["model"], model);
+            assert_eq!(
+                body["output_config"],
+                json!({ "effort": effort }),
+                "{model}"
+            );
+        }
+    }
+}
+
+/// DeepSeek 等 Verbatim 兼容端点把 effort 当作 thinking 模式的参数，没有证据表明它们
+/// 接受单独的 `output_config`：thinking 因预算被省略时仍按原规则一并省略。
+#[test]
+fn verbatim_compatible_endpoint_keeps_effort_bound_to_thinking() {
+    let body = body_for_test(
+        &deepseek_config().with_extended_thinking(10_000, "max"),
+        &request().with_max_tokens(1_024),
+    );
+    assert!(body.get("thinking").is_none());
+    assert!(body.get("output_config").is_none());
+}
+
+/// effort 为空表示没有配置：thinking 被省略时不单独发送空的 `output_config`。
+#[test]
+fn empty_effort_is_not_sent_when_thinking_is_omitted() {
+    let mut config = config().with_extended_thinking(10_000, "");
+    config.model = "claude-sonnet-4-6".into();
+    let body = body_for_test(&config, &history_without_signed_thinking());
     assert!(body.get("thinking").is_none());
     assert!(body.get("output_config").is_none());
 }

@@ -604,6 +604,11 @@ async fn micro_compacted_wire_contract(mode: CompactThinkingMode) {
                 body.get("thinking").is_none(),
                 "manual thinking 缺少带签名闭包时必须省略"
             );
+            assert_eq!(
+                body["output_config"],
+                json!({"effort": "medium"}),
+                "thinking 被省略不影响 effort"
+            );
         }
     }
 }

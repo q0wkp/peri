@@ -45,6 +45,7 @@ pub mod list_nav;
 pub mod markdown;
 pub mod mention_popup;
 pub mod message_area;
+pub(crate) mod model_switch;
 pub mod mouse_router;
 pub mod panel_mouse;
 pub mod panel_overlay;

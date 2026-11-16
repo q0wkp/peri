@@ -541,12 +541,7 @@ fn execute_view_action(action: ViewActionRequest, acp_client: &AcpTuiClient, cwd
                 .position(|alias| *alias == current)
                 .unwrap_or(0);
             let next = aliases[(index + 1) % aliases.len()];
-            let client = acp_client.clone();
-            tokio::spawn(async move {
-                if let Err(error) = client.set_model(next).await {
-                    tracing::warn!(%error, "session model switch failed");
-                }
-            });
+            crate::kit::model_switch::send(acp_client.clone(), next.to_string());
         }
         ViewActionRequest::CyclePermissionMode => {
             crate::kit::permission_mode::cycle(acp_client.clone());
