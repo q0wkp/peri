@@ -22,6 +22,17 @@ use std::{
 };
 
 const CHILD_CASE: &str = "PERI_MODEL_COMMIT_CASE";
+const SESSION_ID: &str = "model-session";
+/// 夹具会话初始所在的档位（与初始 active_alias 一致）。
+const SESSION_ALIAS: &str = "sonnet";
+
+/// 面板提交后会话跟随帧的形态。
+enum Follow {
+    /// 面板激活了该 alias：直接 `set_model`，不查询会话。
+    Activated(&'static str),
+    /// 字段编辑：宿主报告会话当前 alias（`session/metadata`），再 `set_model` 回它。
+    CurrentSession(&'static str),
+}
 
 struct ChildGuard(std::process::Child);
 impl Drop for ChildGuard {
@@ -32,6 +43,11 @@ impl Drop for ChildGuard {
 }
 
 fn isolated(name: &str, scenario: impl Future<Output = ()>) {
+    isolated_in(module_path!(), name, scenario)
+}
+
+/// `module` 是定义该用例的模块路径（`module_path!()`）：子进程按它精确定位同一个用例。
+fn isolated_in(module: &str, name: &str, scenario: impl Future<Output = ()>) {
     if std::env::var(CHILD_CASE).as_deref() == Ok(name) {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -43,7 +59,7 @@ fn isolated(name: &str, scenario: impl Future<Output = ()>) {
     let dir = tempfile::tempdir().unwrap();
     let log_path = dir.path().join("child.log");
     let log = std::fs::File::create(&log_path).unwrap();
-    let (_, test_module) = module_path!().split_once("::").unwrap();
+    let (_, test_module) = module.split_once("::").unwrap();
     let child = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", &format!("{test_module}::{name}"), "--nocapture"])
         .env(CHILD_CASE, name)
@@ -178,10 +194,10 @@ impl Fixture {
         };
         assert_eq!(method, "session/new");
         self.server
-            .send_response(id, Ok(json!({"sessionId":"model-session"})))
+            .send_response(id, Ok(json!({"sessionId": SESSION_ID})))
             .await
             .unwrap();
-        assert_eq!(task.await.unwrap().unwrap(), "model-session");
+        assert_eq!(task.await.unwrap().unwrap(), SESSION_ID);
     }
 
     fn assert_disk_and_frame(&self, params: &Value) {
@@ -225,9 +241,45 @@ impl Fixture {
             .unwrap();
     }
 
-    /// 保存成功且推送成功的一次动作。
+    /// 保存成功且推送成功的一次动作（无会话：只有宿主级推送）。
     async fn expect_notification(&self) {
         self.expect_request(false).await;
+    }
+
+    /// 宿主级 `update_config` 之后当前会话的跟随帧：面板刚激活的 alias 直接 `set_model`；
+    /// 字段编辑先问宿主「会话当前是哪个 alias」，再 `set_model` 回同一个 alias，让会话按
+    /// 最新权威配置重建。
+    async fn expect_follow(&self, follow: Follow) {
+        let alias = match follow {
+            Follow::Activated(alias) => alias,
+            Follow::CurrentSession(reported) => {
+                let IncomingMessage::Request { id, method, params } = self.recv().await else {
+                    panic!("expected session metadata request")
+                };
+                assert_eq!(method, "session/metadata");
+                assert_eq!(params, json!({"sessionId": SESSION_ID}));
+                self.server
+                    .send_response(id, Ok(json!({"modelAlias": reported})))
+                    .await
+                    .unwrap();
+                reported
+            }
+        };
+        let IncomingMessage::Request { id, method, params } = self.recv().await else {
+            panic!("expected session model switch")
+        };
+        assert_eq!(method, "session/set_config_option");
+        assert_eq!(
+            params,
+            json!({"sessionId": SESSION_ID, "configId": "model", "value": alias})
+        );
+        self.server.send_response(id, Ok(json!({}))).await.unwrap();
+    }
+
+    /// 有会话时一次成功提交的完整推送序列：宿主级更新，然后会话跟随。
+    async fn expect_commit(&self, follow: Follow) {
+        self.expect_request(false).await;
+        self.expect_follow(follow).await;
     }
 
     async fn finish(mut self) {
@@ -260,16 +312,16 @@ fn model_commit_switch_persists_workspace_before_request() {
             let snapshot = SERVICE_SNAPSHOT.state().read().clone();
             assert_eq!(
                 snapshot, before,
-                "host edits must not overwrite the active session projection"
+                "the panel never writes the session projection itself; the status bar follows host metadata"
             );
-            fixture.expect_request(false).await;
+            fixture.expect_commit(Follow::Activated("haiku")).await;
             assert_eq!(
                 std::fs::read(&fixture.global).unwrap(),
                 fixture.original_global
             );
             // Re-selecting the active alias still pushes the same saved snapshot.
             switch_active_alias(3);
-            fixture.expect_request(false).await;
+            fixture.expect_commit(Follow::Activated("haiku")).await;
             fixture.finish().await;
         },
     );
@@ -291,11 +343,13 @@ fn model_commit_active_provider_updates_mapping_and_request() {
             let snapshot = SERVICE_SNAPSHOT.state().read().clone();
             assert_ne!(
                 snapshot.model_name, "b-sonnet",
-                "editing host settings must not change the session model"
+                "the panel must not write the model into the local projection; the session reports it"
             );
             assert_eq!(snapshot.memory_mb, 42);
             assert!(MODEL_HIGHLIGHT_UNTIL.get().is_none());
-            fixture.expect_request(false).await;
+            fixture
+                .expect_commit(Follow::CurrentSession(SESSION_ALIAS))
+                .await;
             fixture.finish().await;
         },
     );
@@ -326,7 +380,9 @@ fn model_commit_responses_provider_switch_persists_immediately() {
                 Some(3000),
                 "即时切换必须保留已确认容量"
             );
-            fixture.expect_request(false).await;
+            fixture
+                .expect_commit(Follow::CurrentSession(SESSION_ALIAS))
+                .await;
             fixture.finish().await;
         },
     );
@@ -350,7 +406,9 @@ fn model_commit_responses_model_switch_persists_immediately() {
             let profile = fixture.config.read().config.profiles.sonnet.clone();
             assert_eq!(profile.model.as_deref(), Some("r-haiku"));
             assert_eq!(profile.context_window, Some(3000));
-            fixture.expect_request(false).await;
+            fixture
+                .expect_commit(Follow::CurrentSession(SESSION_ALIAS))
+                .await;
             fixture.finish().await;
         },
     );
@@ -387,7 +445,9 @@ fn model_commit_unrelated_broken_responses_tier_does_not_block_save() {
                 cfg.config.profiles.haiku.context_window, None,
                 "不得为修好其它档位而擅自改坏档位的窗口"
             );
-            fixture.expect_request(false).await;
+            fixture
+                .expect_commit(Follow::CurrentSession(SESSION_ALIAS))
+                .await;
             fixture.finish().await;
         },
     );
@@ -496,7 +556,7 @@ fn model_commit_known_plan_model_without_window_can_be_activated() {
                 })
             ));
             assert!(!crate::app::setup_wizard::needs_setup(&persisted.config));
-            fixture.expect_request(false).await;
+            fixture.expect_commit(Follow::Activated("haiku")).await;
             fixture.finish().await;
         },
     );
@@ -522,7 +582,9 @@ fn model_commit_context_window_recovers_unfinished_active_responses() {
                 )
                 .is_some()
             );
-            fixture.expect_request(false).await;
+            fixture
+                .expect_commit(Follow::CurrentSession(SESSION_ALIAS))
+                .await;
             fixture.finish().await;
         },
     );
@@ -545,7 +607,9 @@ fn model_commit_context_window_persists_for_responses_profile() {
                 persisted.config.profiles.sonnet.context_window,
                 Some(128_000)
             );
-            fixture.expect_request(false).await;
+            fixture
+                .expect_commit(Follow::CurrentSession(SESSION_ALIAS))
+                .await;
             fixture.finish().await;
         },
     );
@@ -560,7 +624,9 @@ fn model_mouse_and_keyboard_repair_then_activate_unfinished_profile() {
             fixture.create_session().await;
             // 先持久化未完成的非活动档位，供面板打开时重新读取。
             edit_field("haiku".into(), FIELD_PROVIDER, false);
-            fixture.expect_request(false).await;
+            fixture
+                .expect_commit(Follow::CurrentSession(SESSION_ALIAS))
+                .await;
             let initial = fixture.config.read().clone();
             assert_eq!(initial.config.profiles.haiku.provider, "r");
             assert_eq!(initial.config.profiles.haiku.context_window, None);
@@ -623,23 +689,35 @@ fn model_mouse_and_keyboard_repair_then_activate_unfinished_profile() {
                 _ => {}
             });
 
+            // 两次提交（窗口修复、激活 haiku）的帧会交错：按方法应答，直到两次会话跟随都出现。
             let mut saved_states = Vec::new();
-            for _ in 0..2 {
+            let mut followed = Vec::new();
+            while followed.len() < 2 {
                 let IncomingMessage::Request { id, method, params } = fixture.recv().await else {
-                    panic!("expected update request")
+                    panic!("expected request")
                 };
-                assert_eq!(method, "session/update_config");
-                let sent: PeriConfig = serde_json::from_value(params["config"].clone()).unwrap();
-                assert_eq!(sent.config.profiles.haiku.context_window, Some(128_000));
-                saved_states.push(sent.config.active_alias);
-                fixture
-                    .server
-                    .send_response(id, Ok(json!({})))
-                    .await
-                    .unwrap();
+                let reply = match method.as_str() {
+                    "session/update_config" => {
+                        let sent: PeriConfig =
+                            serde_json::from_value(params["config"].clone()).unwrap();
+                        assert_eq!(sent.config.profiles.haiku.context_window, Some(128_000));
+                        saved_states.push(sent.config.active_alias);
+                        json!({})
+                    }
+                    "session/metadata" => json!({"modelAlias": SESSION_ALIAS}),
+                    "session/set_config_option" => {
+                        followed.push(params["value"].as_str().unwrap().to_owned());
+                        json!({})
+                    }
+                    other => panic!("unexpected request {other}"),
+                };
+                fixture.server.send_response(id, Ok(reply)).await.unwrap();
             }
             saved_states.sort();
             assert_eq!(saved_states, ["haiku", "sonnet"]);
+            // 窗口修复沿用会话自己的 alias（sonnet）；激活 haiku 的提交直接切到 haiku。
+            followed.sort();
+            assert_eq!(followed, ["haiku", "sonnet"]);
             fixture.finish().await;
         },
     );
@@ -653,7 +731,9 @@ fn model_keyboard_selection_and_window_target_remain_independent() {
             let fixture = Fixture::new(false);
             fixture.create_session().await;
             edit_field("haiku".into(), FIELD_PROVIDER, false);
-            fixture.expect_request(false).await;
+            fixture
+                .expect_commit(Follow::CurrentSession(SESSION_ALIAS))
+                .await;
             let before = fixture.config.read().config.profiles.sonnet.clone();
             let config = fixture.config.clone();
             mount_panel_frames(TEST_AREA, 3, move |frame, panel| {
@@ -678,7 +758,9 @@ fn model_keyboard_selection_and_window_target_remain_independent() {
                 assert_eq!(saved.config.profiles.haiku.context_window, Some(128_000));
                 assert_eq!(saved.config.profiles.sonnet, before);
             });
-            fixture.expect_request(false).await;
+            fixture
+                .expect_commit(Follow::CurrentSession(SESSION_ALIAS))
+                .await;
 
             let config = fixture.config.clone();
             mount_panel_frames(TEST_AREA, 3, move |frame, panel| {
@@ -688,7 +770,7 @@ fn model_keyboard_selection_and_window_target_remain_independent() {
                     assert_eq!(config.read().config.active_alias, "opus");
                 }
             });
-            fixture.expect_request(false).await;
+            fixture.expect_commit(Follow::Activated("opus")).await;
             fixture.finish().await;
         },
     );
@@ -702,7 +784,9 @@ fn model_selected_inactive_profile_receives_generic_field_edit() {
             let fixture = Fixture::new(false);
             fixture.create_session().await;
             edit_field("haiku".into(), FIELD_PROVIDER, false);
-            fixture.expect_request(false).await;
+            fixture
+                .expect_commit(Follow::CurrentSession(SESSION_ALIAS))
+                .await;
             let before = fixture.config.read().config.profiles.sonnet.clone();
             let config = fixture.config.clone();
             mount_panel_frames(TEST_AREA, 3, move |frame, panel| {
@@ -720,7 +804,9 @@ fn model_selected_inactive_profile_receives_generic_field_edit() {
                 assert_eq!(saved.config.profiles.haiku.effort, "max");
                 assert_eq!(saved.config.profiles.sonnet, before);
             });
-            fixture.expect_request(false).await;
+            fixture
+                .expect_commit(Follow::CurrentSession(SESSION_ALIAS))
+                .await;
             fixture.finish().await;
         },
     );
@@ -807,7 +893,7 @@ fn model_commit_save_failure_keeps_memory_and_pushes_nothing() {
 }
 
 /// 推送失败（host 返回错误）不回滚已落盘的内存，也不重发——推送只是发布，
-/// 落盘结果才是面板显示的依据。
+/// 落盘结果才是面板显示的依据；宿主级更新被拒绝时会话也不跟随（`finish` 断言此后没有帧）。
 #[test]
 fn model_commit_rpc_failure_keeps_saved_state_without_retry() {
     isolated(
@@ -832,3 +918,6 @@ fn model_commit_rpc_failure_keeps_saved_state_without_retry() {
         },
     );
 }
+
+#[path = "commit_follow_test.rs"]
+mod follow;

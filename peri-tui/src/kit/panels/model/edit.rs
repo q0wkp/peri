@@ -286,17 +286,28 @@ fn commit_snapshot(handle: &PeriHandle, candidate: PeriConfig, change: ModelChan
 /// 发布 authority 接纳后的配置：内存、投影、ACP。
 ///
 /// ACP 失败只提示“配置已保存，运行端同步失败”，不回滚、不重发，也不发布原始 candidate。
+/// 宿主接受后当前会话经 `set_model` 跟随（Model 面板编辑立即作用于运行中的会话）。
 fn publish_accepted(handle: &PeriHandle, accepted: PeriConfig, change: ModelChange) {
     *handle.write() = accepted.clone();
+    let activated = match &change {
+        ModelChange::ActiveAlias(alias) => Some(alias.clone()),
+        ModelChange::ProfileField(_) => None,
+    };
     project_model_change(&accepted, change);
     tokio::spawn(async move {
-        if let Some(client) = ACP_CLIENT_HANDLE.get()
-            && let Err(error) = client.update_config(&accepted).await
-        {
+        let Some(client) = ACP_CLIENT_HANDLE.get() else {
+            return;
+        };
+        if let Err(error) = client.update_config(&accepted).await {
             crate::kit::config_service::notify_runtime_sync_failed(&anyhow::anyhow!(
                 error.to_string()
             ));
+            return;
         }
+        // 同一任务内顺序 await：宿主级更新的响应返回时宿主已保存并更新权威快照，
+        // 会话再据此重建，读不到旧配置。宿主级更新失败时不让会话跟随，避免对同一
+        // 份被拒绝的配置再报一次错覆盖提示。
+        crate::kit::model_switch::follow_panel_commit(client, activated.as_deref()).await;
     });
 }
 

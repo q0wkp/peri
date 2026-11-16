@@ -50,13 +50,7 @@ fn switch_session_alias(index: usize) {
         .get()
         .filter(|client| client.has_session())
     {
-        let client = client.clone();
-        let alias = alias.to_string();
-        tokio::spawn(async move {
-            if let Err(error) = client.set_model(&alias).await {
-                tracing::warn!(%error, "session model switch failed");
-            }
-        });
+        crate::kit::model_switch::send(client.as_ref().clone(), alias.to_string());
     } else {
         switch_active_alias(index);
     }

@@ -1440,6 +1440,7 @@ session-creation-failed = Session creation failed: { $error }
 panel-host-settings = Host settings
 
 permission-mode-update-failed = Permission mode update failed: { $error }
+model-switch-failed = Model switch failed: { $error }
 setup-activation-failed = Settings were saved, but could not be activated. Press Enter to retry.
 setup-saving = Saving and activating settings…
 setup-connectivity-checking = Checking endpoint…

@@ -270,6 +270,44 @@ impl AcpTuiClient {
             .lifecycle
             .current_session_id()
             .ok_or_else(|| AcpError::new(-32603, "no active session"))?;
+        self.send_model_option(&session_id, alias).await
+    }
+
+    /// Rebuild the active session's model selection from the host's current
+    /// configuration, so a committed Model-panel edit takes effect immediately.
+    ///
+    /// `activated` is the alias the panel just made active; otherwise the session
+    /// keeps the alias the host reports for it (the status-bar projection lags the
+    /// host by a tick, so it is not consulted). Without a session there is nothing to
+    /// follow and no request is sent. The session id is read once under the lifecycle
+    /// gate, so the alias lookup and the switch address the same session.
+    pub async fn follow_host_config(&self, activated: Option<&str>) -> Result<(), AcpError> {
+        let _operation = self.lifecycle.operation_gate().lock().await;
+        self.check_restore_error()?;
+        let Some(session_id) = self.lifecycle.current_session_id() else {
+            return Ok(());
+        };
+        let alias = match activated {
+            Some(alias) => alias.to_owned(),
+            None => {
+                let metadata = peri_time::timeout(
+                    CONFIG_REQUEST_TIMEOUT,
+                    self.transport
+                        .send_request("session/metadata", json!({ "sessionId": session_id })),
+                )
+                .await
+                .map_err(|_| AcpError::new(-32603, "session metadata timed out"))??;
+                metadata
+                    .get("modelAlias")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                    .ok_or_else(|| AcpError::new(-32603, "session metadata has no modelAlias"))?
+            }
+        };
+        self.send_model_option(&session_id, &alias).await
+    }
+
+    async fn send_model_option(&self, session_id: &str, alias: &str) -> Result<(), AcpError> {
         let params = json!({ "sessionId": session_id, "configId": "model", "value": alias });
         peri_time::timeout(
             CONFIG_REQUEST_TIMEOUT,
@@ -339,7 +377,10 @@ impl AcpTuiClient {
     /// Update the host configuration selected at launch.
     ///
     /// A complete host configuration must never be copied into the active
-    /// session's workspace. Session model selection uses `set_model` instead.
+    /// session's workspace, so this request carries no session id and leaves
+    /// existing sessions untouched. Session model selection uses `set_model`;
+    /// the Model panel calls `follow_host_config` after this request succeeds
+    /// so the active session follows the committed profile.
     pub async fn update_config(&self, config: &crate::config::PeriConfig) -> Result<(), AcpError> {
         let _ = self
             .transport
