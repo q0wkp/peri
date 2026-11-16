@@ -63,12 +63,10 @@ fn shorten_path(path: &str) -> String {
 ///
 /// 等价于历史上的 `truncate_text` / `truncate_chars`（两份实现完全一致，仅命名不同）。
 pub fn truncate_text(s: &str, max_chars: usize) -> String {
-    let len = s.chars().count();
-    if len <= max_chars {
-        s.to_string()
-    } else {
-        let truncated: String = s.chars().take(max_chars).collect();
-        format!("{}...", truncated)
+    // 摘要只需定位截断边界，避免为短预览扫描整个工具输入/输出。
+    match s.char_indices().nth(max_chars) {
+        Some((end, _)) => format!("{}...", &s[..end]),
+        None => s.to_string(),
     }
 }
 
@@ -139,16 +137,16 @@ fn prefix_by_width(s: &str, max_width: usize) -> String {
 /// 按显示宽度取后缀（从尾部反向累计，不追加省略号）。
 fn suffix_by_width(s: &str, max_width: usize) -> String {
     let mut width = 0usize;
-    let mut parts: Vec<&str> = Vec::new();
-    for g in s.graphemes(true).rev() {
+    let mut start = s.len();
+    for (byte, g) in s.grapheme_indices(true).rev() {
         let w = g.width();
         if width + w > max_width {
             break;
         }
-        parts.push(g);
+        start = byte;
         width += w;
     }
-    parts.into_iter().rev().collect()
+    s[start..].to_string()
 }
 
 /// Wrap text into lines of at most `max_width` terminal display columns.
@@ -221,12 +219,7 @@ fn summarize_input_by_name(
     obj: &serde_json::Map<String, serde_json::Value>,
 ) -> Option<String> {
     // 字符串字段读取 helper（view_mapper 风格，空值返回 ""）
-    let str_val = |key: &str| -> String {
-        obj.get(key)
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string()
-    };
+    let str_val = |key: &str| -> &str { obj.get(key).and_then(|v| v.as_str()).unwrap_or("") };
     // 旧 router 风格的 Option<&str> 读取（用于 "有值才格式化带引号" 分支）
     let field = |key: &str| -> Option<&str> { obj.get(key).and_then(|v| v.as_str()) };
 
@@ -234,9 +227,9 @@ fn summarize_input_by_name(
         // ── 无前缀，文件路径不截断但精简 cwd 前缀（view_mapper：file_path 为空时回退 path；
         //    若仍为空返回 "(empty input)" 占位，避免渲染层显示空白卡片）──
         "Read" | "Write" | "Edit" => {
-            let p = shorten_path(&str_val("file_path"));
+            let p = shorten_path(str_val("file_path"));
             if p.is_empty() {
-                let fallback = shorten_path(&str_val("path"));
+                let fallback = shorten_path(str_val("path"));
                 if fallback.is_empty() {
                     Some("(empty input)".to_string())
                 } else {
@@ -247,17 +240,17 @@ fn summarize_input_by_name(
             }
         }
         // ── 无前缀，命令截断 400 ──
-        "Bash" => Some(truncate_text(&str_val("command"), 400)),
+        "Bash" => Some(truncate_text(str_val("command"), 400)),
         // ── 有前缀 pattern:，pattern 截断 200，带引号（统一格式）──
         "Glob" | "Grep" => {
             let p = str_val("pattern");
             let p = if p.is_empty() { str_val("query") } else { p };
-            Some(format!(r#"pattern: "{}""#, truncate_text(&p, 200)))
+            Some(format!(r#"pattern: "{}""#, truncate_text(p, 200)))
         }
         // ── "operation folder_path"，不截断但精简 cwd 前缀 ──
         "folder_operations" => {
             let op = str_val("operation");
-            let fp = shorten_path(&str_val("folder_path"));
+            let fp = shorten_path(str_val("folder_path"));
             Some(format!("{} {}", op, fp))
         }
         // ── query: 截断 60，带引号（统一格式）──
@@ -275,7 +268,7 @@ fn summarize_input_by_name(
         // ── 空字符串（文档无参数）──
         "TodoWrite" => Some(String::new()),
         // ── task_id 截断 12 ──
-        "AgentResult" => Some(truncate_text(&str_val("task_id"), 12)),
+        "AgentResult" => Some(truncate_text(str_val("task_id"), 12)),
         // ── Agent/Task（别名 task）：显示调用模式或 subagent type，再以空格连接
         //    prompt 任务预览（截断 400）；prompt 为空时回退 description ──
         "Agent" | "Task" => {
@@ -286,16 +279,16 @@ fn summarize_input_by_name(
             } else if obj.get("fork").and_then(|v| v.as_bool()) == Some(true) {
                 "fork".to_string()
             } else if !subagent_type.is_empty() {
-                truncate_text(&subagent_type, 64)
+                truncate_text(subagent_type, 64)
             } else {
                 String::new()
             };
 
             let prompt = str_val("prompt");
             let task = if !prompt.is_empty() {
-                truncate_text(&prompt, 400)
+                truncate_text(prompt, 400)
             } else {
-                truncate_text(&str_val("description"), 400)
+                truncate_text(str_val("description"), 400)
             };
 
             Some(match (label.is_empty(), task.is_empty()) {
@@ -306,11 +299,11 @@ fn summarize_input_by_name(
             })
         }
         // ── file_path 不截断但精简 cwd 前缀 ──
-        "artifact" => Some(shorten_path(&str_val("file_path"))),
+        "artifact" => Some(shorten_path(str_val("file_path"))),
         // ── tool_name 截断 40 ──
-        "ExecuteExtraTool" => Some(truncate_text(&str_val("tool_name"), 40)),
+        "ExecuteExtraTool" => Some(truncate_text(str_val("tool_name"), 40)),
         // ── query 截断 40 ──
-        "SearchExtraTools" => Some(truncate_text(&str_val("query"), 40)),
+        "SearchExtraTools" => Some(truncate_text(str_val("query"), 40)),
         _ => None,
     }
 }

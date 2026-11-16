@@ -51,7 +51,7 @@ P2 与 P4 共同落实「同屏最多一个高显著 spinner」：高显著 = `s
 | ④ Verb | `format_tool_name` 本地化动词（Read/Bash/Shell/Edit…） | `sem.text.primary`，**无 bold** |
 | ⑤ 摘要 | `input_summary` 截断（预算减去缩进与 duration 列） | `sem.text.muted` |
 | ⑥ 错误词 | error 时 ` — Failed`（i18n `msg-status-failed`） | `sem.status.error` + bold |
-| ⑦ duration | running 整数秒（`4s`）/ completed 冻结值（一位小数秒 `0.4s`，UI 不出现 `ms`）；四舍五入后即 `0.0s` 的（< 50ms）不渲染，行在 summary 处结束；右对齐到居中带右缘（`line_width`；窄终端即 `term_width - 1`） | `sem.text.dim` |
+| ⑦ duration | running 整数秒（`4s`）/ completed 冻结值（一位小数秒 `0.4s`，UI 不出现 `ms`）；四舍五入后即 `0.0s` 的（< 50ms）不渲染，行在 summary 处结束；右对齐到内容带右缘（`line_width`；窄终端即 `term_width - 1`） | `sem.text.dim` |
 
 要点：
 

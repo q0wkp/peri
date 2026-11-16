@@ -59,11 +59,7 @@ pub(super) struct ScrollbarFields {
 ///
 /// 替代被移除的 ScrollView 内置滚动条。每帧 render body 更新 ScrollbarFields state。
 ///
-/// [§3.1] 滚动条是窗口级 chrome：锚在**窗口最右列**，不随居中带内移（带内的
-/// 最右列是正文的最后一列）。MessageArea 由 `CenterBand` 在 draw 期收窄后，
-/// 本 hook 的 `pre_component_draw` 看到的是 band；render body 每帧写入终端
-/// 宽度与网格，由 [`scrollbar_outer_area`] 显式还原外框。渲染与命中测试
-/// （`scroll::handle_event`）共用该矩形。
+/// 滚动条锚在窗口最右列，渲染与命中测试共用 [`scrollbar_outer_area`]。
 pub(super) struct ScrollbarHook {
     pub(super) fields: State<ScrollbarFields>,
     /// 外框（终端整幅宽度）；命中测试与渲染共用同一矩形。
@@ -82,7 +78,7 @@ impl ScrollbarHook {
     }
 }
 
-/// 由居中带区域还原滚动条外框：左缘退回带前留白、宽取终端总宽。
+/// 从内容区域确定窗口滚动条外框，宽度取终端总宽。
 ///
 /// `term_width == 0`（终端尺寸不可用）时回退 band——找不到窗口边界时宁可
 /// 只覆盖带内，不构造跨屏矩形。

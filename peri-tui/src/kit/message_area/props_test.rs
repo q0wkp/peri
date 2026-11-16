@@ -29,8 +29,8 @@ fn initial_message_area_geometry_requests_one_corrective_frame() {
 fn scrollbar_outer_area_restores_terminal_width_from_band() {
     let grid = GridSpec::grid_for(140);
     let band = Rect::new(grid.left_pad, 2, grid.band_width, 20);
-    assert_eq!(grid.left_pad, 11);
-    // band → 整幅外框：左缘退回留白、宽取终端宽度。
+    assert_eq!(grid.left_pad, 0);
+    // 全宽内容带与窗口外框对齐。
     assert_eq!(
         scrollbar_outer_area(band, grid, 140),
         Rect::new(0, 2, 140, 20)

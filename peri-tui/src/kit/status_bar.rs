@@ -19,7 +19,7 @@ use ratatui_kit::{
     prelude::*,
     ratatui::{
         layout::{Alignment, Constraint, Direction, Flex, Rect},
-        style::{Modifier, Style, Stylize},
+        style::{Color, Modifier, Style, Stylize},
         text::{Line, Span},
         widgets::{Paragraph, Wrap},
     },
@@ -165,15 +165,8 @@ fn StatusBarRow1(mut hooks: Hooks) -> impl Into<AnyElement<'static>> {
         let tracker = hooks.use_hook(|| AreaTracker { rect: None });
         row1_area = tracker.rect;
     }
-    // 模拟 WordWrapper 词级折行（Wrap { trim: false }，对齐 ratatui-widgets 0.3.2
-    // reflow.rs 语义）计算模型段的点击区域列表——
-    // 每个区域 `(line_idx, x_start, x_end)` 对应模型段内一个词折行后的位置。
-    // [Bug 修复] 旧实现只记录循环结束后的 line_idx（= 最后一个 span 所在行），
-    // 折行点落在模型段之后时模型文本在第 0 行而点击判定用第 1 行，点击永久失效。
-    // 现在按模型段内每个词各自记录行号，模型段跨行/尾部折行时返回多个区域；
-    // 换行判定按 WordWrapper 逐字符增量检查的等价形式（词前缀放不下才换行，
-    // 词恰好放满整行时留在行尾），与真实渲染逐位对齐，
-    // 不再有 span 内部断行的 1-2 列死区。
+    // 模型段点击区域取自 Row1 的真实 Paragraph 渲染结果，折行后每行各有区域
+    // `(line_idx, x_start, x_end)`，与屏幕显示逐格一致。
     let model_click: Vec<(u16, u16, u16)> =
         if let (Some(start), Some(area)) = (model_start, row1_area) {
             model_click_areas(&spans, area.width as usize, row_height, start, model_end)
@@ -372,8 +365,8 @@ pub struct StatusBarProps {
 pub fn StatusBar(props: &StatusBarProps, mut hooks: Hooks) -> impl Into<AnyElement<'static>> {
     let _lang = hooks.use_atom(&atoms::LANG_VERSION);
 
-    // [§3.1] 居中带由 AppShell 的 `CenterBand` 包装在 draw 期收窄；Row1 的
-    // 折行与点击列都以收窄后的区域为准（`use_previous_size` / AreaTracker 在其后）。
+    // [§3.1] 内容带由 AppShell 的 `ContentBand` 包装在 draw 期统一区域；Row1 的
+    // 折行与点击列都以内容区域为准（`use_previous_size` / AreaTracker 在其后）。
 
     // §11：h<8 完全隐藏；h<12 仅 Row1 + NotifRow（无 key hints / 缓冲行）。
     // Row2 是独立组件，条件渲染不违反 hook 顺序（计划 Slice 1c 裁决）。
@@ -414,42 +407,7 @@ pub fn StatusBar(props: &StatusBarProps, mut hooks: Hooks) -> impl Into<AnyEleme
 
 // ── 辅助函数 ─────────────────────────────────────────────────────────────
 
-/// [升级护栏] 本函数是对 ratatui-widgets 内部 reflow 算法（`WordWrapper`）的
-/// 复刻模拟——与 message_area 的"真实渲染复刻"方案形成两套 wrap 语义认知。
-/// 升级 ratatui-widgets 依赖（即使 patch 版本）时，必须运行
-/// `cargo test -p peri-tui --lib status_bar_test` 的 ground-truth 差分测试
-/// （TestBackend 真实渲染逐位对比 + 随机差分），并重新评估下方列出的已知差异。
-/// Cargo.toml 中 ratatui 依赖处有同步标注。
-///
-/// 模拟 WordWrapper 词级折行（对齐 ratatui-widgets 0.3.2 reflow.rs `Wrap{trim:false}`
-/// 语义，经 TestBackend ground-truth 渲染逐位验证），返回模型段内每个**词**的
-/// 点击区域 `(line_idx, x_start, x_end)`（相对 Row1 区域）。
-///
-/// 词级规则（reflow.rs 逐行核对 + TestBackend 差分实验确认）：
-/// - 词 = 非空白段；空白（含跨 span 边界累积）为词前宽度 `ws`；
-/// - append 前检查：`line_x > 0 && line_x + ws + w - cw_last >= area_w` 且行非空 →
-///   词整体换到新行。等价推导：reflow.rs L129 `pending_word_overflow` 是逐字符增量
-///   检查（`line_width + ws + 词内前缀宽 >= max`，检查时不含当前字符），词内前缀
-///   最大 = `w - cw_last`（cw_last = 词尾字符宽）→ 触发条件即上式。词恰好放满
-///   整行（ASCII 词尾时 `line + ws + w == area_w`）**留在行尾**，走 line_full 行推出；
-/// - 换行时行尾回填（L139-150）：行尾剩余空间内的词前空白被丢弃（视觉等同行尾
-///   空格），剩余空白随词到下一行——下一行可能顶格；
-/// - 行首词（`line_x == 0`）不触发换行——超宽词放行首（untrimmed_overflow 近似；
-///   WordWrapper 对行首超宽词会拆分跨行，模拟整词放行首，超界部分天然不可达）。
-///   注意边界是 `ws + w > area_w`（词 + 前导空白超宽，L107-109 逐字符检查），
-///   不只是 `w > area_w`：此时区域覆盖真实前缀（可点），词尾剩余字符无区域
-///   （点击失效）。状态栏模型段首词为 sep "·"（宽 1）、模型段恰在行首才触发，
-///   罕见且无害；
-/// - 文本末尾 flush（L178-181）无溢出检查：**最后一个词永不换行**（超界截断
-///   显示），模拟对所有词（含最后一个）做换行检查。状态栏中 MEM 段无条件
-///   存在，模型段永不可能是最后一段 → 差异当前不可达；若尾部段改为可选
-///   需重新评估；
-/// - append 后检查 `line_full`：`line_x >= area_w` → 行推出（词留在行尾）。
-///
-/// 每个词一个区域；点击词（含词前空白）即可命中。模型段跨行时每行各有区域，
-/// 折行点落在模型段之后（尾部 CPU/MEM/bg/ctx 折到下一行）时模型段仍整段在第 0 行——
-/// 修复前 `line_idx` 取循环结束后的值（= 最后一个 span 所在行），
-/// 导致点击判定错位一行、弹窗永久无法打开。
+/// 用 Ratatui 的真实 Paragraph 渲染求目标 span 点击区域，保留换行、裁剪和宽字符语义。
 fn model_click_areas(
     spans: &[Span<'static>],
     area_w: usize,
@@ -457,76 +415,47 @@ fn model_click_areas(
     model_start: usize,
     model_end: usize,
 ) -> Vec<(u16, u16, u16)> {
-    // 防御：不可渲染场景直接返回空（组件内 row_height ∈ {1,2}，0 不可达）
     if area_w == 0 || spans.is_empty() || model_start >= model_end || row_height == 0 {
         return Vec::new();
     }
-    // 词流：把 spans 拼接为字符流逐字符扫描，词可跨 span 边界合并；
-    // in_model 按词起点所在 span 是否 ∈ [model_start, model_end) 标记。
-    let mut words: Vec<(bool, usize, usize, usize)> = Vec::new(); // (in_model, ws, w, cw_last)
-    let mut cur_ws = 0usize;
-    let mut cur_w = 0usize;
-    let mut cur_cw_last = 0usize;
-    let mut cur_model = false;
-    let mut in_word = false;
-    for (span_idx, s) in spans.iter().enumerate() {
-        let in_model = span_idx >= model_start && span_idx < model_end;
-        for c in s.content.chars() {
-            if c.is_whitespace() {
-                if in_word {
-                    words.push((cur_model, cur_ws, cur_w, cur_cw_last));
-                    in_word = false;
-                    cur_ws = 0;
-                }
-                cur_ws += char_width(c);
+    let width = area_w.min(usize::from(u16::MAX)) as u16;
+    let area = Rect::new(0, 0, width, row_height);
+    let marker = Color::Rgb(1, 2, 3);
+    let marked = spans
+        .iter()
+        .enumerate()
+        .map(|(index, span)| {
+            let style = if (model_start..model_end).contains(&index) {
+                span.style.bg(marker)
             } else {
-                if !in_word {
-                    in_word = true;
-                    cur_model = in_model;
-                    cur_w = 0;
-                }
-                let w = char_width(c);
-                cur_w += w;
-                cur_cw_last = w;
-            }
-        }
-    }
-    if in_word {
-        words.push((cur_model, cur_ws, cur_w, cur_cw_last));
-    }
-    // 词级折行模拟（与 WordWrapper 同构）：
-    let max_line = row_height.saturating_sub(1);
+                span.style
+            };
+            Span::styled(span.content.clone(), style)
+        })
+        .collect::<Vec<_>>();
+    let mut buffer = ratatui_kit::ratatui::buffer::Buffer::empty(area);
+    ratatui_kit::ratatui::widgets::Widget::render(
+        Paragraph::new(Line::from(marked)).wrap(Wrap { trim: false }),
+        area,
+        &mut buffer,
+    );
+
     let mut areas = Vec::new();
-    let mut line_idx = 0u16;
-    let mut line_x = 0usize;
-    for (in_model, mut ws, w, cw_last) in words {
-        // 词 append 前：词前缀（不含词尾字符）放不下（>=）且行非空 → 词整体换行。
-        // 逐字符增量检查的等价形式：前缀最大 = w - cw_last。
-        // 词恰好填满整行时留在行尾（line_full 语义）。
-        if line_x > 0 && line_x + ws + w - cw_last >= area_w && line_idx < max_line {
-            // 行尾回填：行尾剩余空间内的词前空白被丢弃（视觉等同行尾空格），
-            // 剩余空白随词到下一行（下一行可能顶格）。
-            let remaining = area_w.saturating_sub(line_x);
-            ws = ws.saturating_sub(remaining);
-            line_idx += 1;
-            line_x = 0;
-        }
-        if in_model {
-            areas.push((line_idx, line_x as u16, (line_x + ws + w) as u16));
-        }
-        line_x += ws + w;
-        // append 后：行满（>=）→ 行推出（词留在行尾）
-        if line_x >= area_w && line_idx < max_line {
-            line_idx += 1;
-            line_x = 0;
+    for y in 0..row_height {
+        let mut x = 0;
+        while x < width {
+            if buffer[(x, y)].style().bg != Some(marker) {
+                x += 1;
+                continue;
+            }
+            let start = x;
+            while x < width && buffer[(x, y)].style().bg == Some(marker) {
+                x += 1;
+            }
+            areas.push((y, start, x));
         }
     }
     areas
-}
-
-/// 单个字符的终端显示宽度（UnicodeWidthChar 语义：CJK/全角=2、零宽=0）。
-fn char_width(c: char) -> usize {
-    unicode_width::UnicodeWidthChar::width(c).unwrap_or(0)
 }
 
 /// 追踪 Row1 组件区域，供鼠标点击→打开 alias 快速切换弹窗使用。

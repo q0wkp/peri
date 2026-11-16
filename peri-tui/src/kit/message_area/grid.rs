@@ -1,37 +1,12 @@
 //! Transcript 水平网格（规格 §3.1）——文本共享基准列，过程区右移 `indent`。
 //!
-//! ```text
-//! |←— left_pad —→|←————————— band_width —————————→|← 余量 →|
-//!                outer  accent  gap   content   gutter  scroll
-//!                  1      1      2   flexible   ≤ 12      1
-//! ```
-//!
-//! - `outer`：selection border / 安全区，固定 1 cell（渲染层每行首列的空 cell，
-//!   焦点条在其上叠加，不造成内容列位移）。
-//! - `accent`：固定 1 cell，块首行放类型/状态符号，续行放 dim 竖线。
-//! - `gap`：默认 2 cells；Compact/Narrow 缩为 1（§11）。
-//! - `content`：文本区基准列（user/AI 正文共享左起点）；过程区在其上再右移
-//!   `indent` 格——左缘标记列随之为 `outer + indent`（col1 的文本竖线不再
-//!   贯穿，转场处由台阶 `╰─╮` / `╭─╯` 连接，§1/§3/§6）——最大可读宽度 100 cells。
-//! - `gutter`：metadata（duration / 计数）右对齐列，最多 12 cells。
-//! - `scroll`：最右 1 cell 留给滚动条 thumb（文本不进该列）。
-//! - 断点（§11）：Wide ≥ 100 / Standard 60–99 / Compact 40–59 / Narrow < 40。
-//!
-//! 整条带在终端内水平居中：content 触顶后余量由「全部堆在内容与 metadata 之间」
-//! 改为左右均分（`left_pad`），内容与 metadata 不再一个贴左缘、一个贴右缘。
-//! 带宽不超过终端宽度——窄终端 `left_pad = 0`，逐列行为与居中前一致。
-
-/// content 列宽上限——可读行宽（§3.1）。
-pub const MAX_CONTENT_WIDTH: u16 = 100;
-
-/// metadata gutter 上限：最长 duration `123min 45s`（10 列）+ 与 content 的 2 列间隔。
-/// 取满此上限才能保证「summary ≤ content」时 metadata 恒可右对齐（不因收窄而丢失）。
-pub const MAX_META_GUTTER: u16 = 12;
+//! 消息、输入框和状态栏共用终端全宽；正文保留前缀、安全边距和滚动条列。
+//! 过程区缩进占用正文预算，metadata 按实际剩余空间显示。
 
 /// 响应式断点（§11）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Breakpoint {
-    /// `>= 100`：content 最大 100 cells；metadata 可右对齐。
+    /// `>= 100`：正文随终端扩展；metadata 可右对齐。
     Wide,
     /// `60–99`：默认布局；metadata 紧跟 summary。
     Standard,
@@ -84,12 +59,12 @@ pub struct GridSpec {
     /// （[`Self::process_marker_col`]：`outer + indent`）与转场台阶形态
     /// （§6，`> 0` 才画）；`== 0` 时过程区前缀回退基准形态（§9）。
     pub indent: u16,
-    /// content 列宽（文本区基准列；≤ 100）。
+    /// content 列宽（文本区基准列）。
     pub content: u16,
-    /// 居中带宽度（消息区 / 输入区实际区域宽度，含最右滚动条列）——
+    /// 内容带宽度（消息区 / 输入区实际区域宽度，含最右滚动条列）——
     /// 组件的区域宽度（`MsgAreaTracker` / `AreaTracker`）与 `line_width()` 由它派生。
     pub band_width: u16,
-    /// 居中带左偏移（终端列坐标）——余量左右均分，奇数余量留右侧。
+    /// 内容带左偏移；主界面固定为 0，保持左侧对齐。
     pub left_pad: u16,
     /// 当前断点。
     pub bp: Breakpoint,
@@ -103,11 +78,8 @@ impl Default for GridSpec {
 }
 
 impl GridSpec {
-    /// 按终端宽度计算网格：`content = min(term - 6, 100)`，整条带水平居中。
-    ///
-    /// 带宽 = outer + accent + gap + content + metadata gutter + 滚动条列，
-    /// 以终端宽度封顶：窄终端（带宽 ≥ 终端宽）`left_pad = 0`，与居中前逐列一致。
-    /// `term_width` 为终端总列数（MessageArea 区域宽度）。
+    /// 按终端全宽计算网格，正文扣除前缀、安全边距和滚动条预留的 6 列。
+    /// 窄终端保留至少 1 列正文，实际绘制仍裁剪到组件区域内。
     pub fn grid_for(term_width: u16) -> Self {
         let bp = match term_width {
             w if w >= 100 => Breakpoint::Wide,
@@ -126,8 +98,8 @@ impl GridSpec {
         } else {
             0
         };
-        let content = (term_width.saturating_sub(6)).clamp(1, MAX_CONTENT_WIDTH);
-        let band_width = (1 + 1 + gap + content + MAX_META_GUTTER + 1).min(term_width);
+        let content = term_width.saturating_sub(6).max(1);
+        let band_width = term_width;
         Self {
             outer: 1,
             accent: 1,
@@ -135,7 +107,7 @@ impl GridSpec {
             indent,
             content,
             band_width,
-            left_pad: term_width.saturating_sub(band_width) / 2,
+            left_pad: 0,
             bp,
         }
     }
@@ -230,10 +202,11 @@ mod tests {
         assert_eq!(GridSpec::grid_for(20).bp, Breakpoint::Narrow);
     }
 
-    /// content = min(term - 6, 100)；Narrow 也有 ≥1 的 content。
+    /// 正文随终端宽度扩展，Narrow 也有 ≥1 的 content。
     #[test]
-    fn content_caps_at_100_and_min_term_minus_6() {
-        assert_eq!(GridSpec::grid_for(120).content, 100);
+    fn content_follows_terminal_width() {
+        assert_eq!(GridSpec::grid_for(120).content, 114);
+        assert_eq!(GridSpec::grid_for(220).content, 214);
         assert_eq!(GridSpec::grid_for(100).content, 94);
         assert_eq!(GridSpec::grid_for(80).content, 74);
         assert_eq!(GridSpec::grid_for(60).content, 54);
@@ -306,40 +279,31 @@ mod tests {
         }
     }
 
-    /// 未触顶（content < 100）：带宽 = 终端宽、不居中、满行宽度 = 终端宽 - 1——
-    /// 与居中前的逐列行为完全一致（窄终端不受本次改动影响）。
+    /// 从窄屏到超宽终端都占满宽度，不产生左右居中留白。
     #[test]
-    fn band_fills_terminal_before_content_caps() {
-        for term in [30u16, 40, 60, 80, 100, 106] {
+    fn band_fills_terminal_at_every_width() {
+        for term in [
+            0u16,
+            1,
+            6,
+            30,
+            40,
+            60,
+            80,
+            100,
+            106,
+            117,
+            120,
+            140,
+            220,
+            u16::MAX,
+        ] {
             let g = GridSpec::grid_for(term);
             assert_eq!(g.band_width, term, "term={term}：带宽应铺满终端");
-            assert_eq!(g.left_pad, 0, "term={term}：不居中");
-            assert_eq!(g.line_width(), term - 1, "term={term}：满行宽度");
-            assert_eq!(g.content, term - 6, "term={term}：content 未触顶");
+            assert_eq!(g.left_pad, 0, "term={term}：左侧对齐");
+            assert_eq!(g.line_width(), term.saturating_sub(1));
+            assert_eq!(g.content, term.saturating_sub(6).max(1));
         }
-    }
-
-    /// 触顶（content = 100）：带宽固定 117，余量左右均分（奇数余量留右侧）。
-    #[test]
-    fn band_centers_after_content_caps() {
-        let g = GridSpec::grid_for(120);
-        assert_eq!(g.content, 100);
-        assert_eq!(g.band_width, 117);
-        assert_eq!(g.left_pad, 1);
-
-        let g = GridSpec::grid_for(200);
-        assert_eq!(g.band_width, 117);
-        assert_eq!(g.left_pad, 41);
-        assert_eq!(
-            g.left_pad as usize * 2 + g.band_width as usize,
-            199,
-            "余量均分，奇数余 1 列留在右侧"
-        );
-
-        // 触顶起点：带被终端宽度封顶，居中从 0 连续过渡
-        let g = GridSpec::grid_for(117);
-        assert_eq!(g.band_width, 117);
-        assert_eq!(g.left_pad, 0);
     }
 
     /// 带（含滚动条列）不超出终端宽度——行渲染器按 line_width 保证不换行。
@@ -353,25 +317,6 @@ mod tests {
                 g.band_width
             );
             assert!(g.line_width() <= w.saturating_sub(1), "term={w}: 满行宽度");
-        }
-    }
-
-    /// metadata gutter：content 触顶后恒能容纳最长 duration（summary ≤ content），
-    /// 不因居中收窄而丢失右对齐 metadata。
-    #[test]
-    fn meta_gutter_fits_longest_metadata() {
-        let longest = unicode_width::UnicodeWidthStr::width("123min 45s");
-        for term in [117u16, 120, 160, 240] {
-            let g = GridSpec::grid_for(term);
-            assert_eq!(
-                g.band_width,
-                (g.first_prefix_width() as u16) + g.content + MAX_META_GUTTER + 1,
-                "term={term}: gutter 应为上限值"
-            );
-            assert!(
-                g.first_prefix_width() + g.content_width() + 2 + longest <= g.line_width() as usize,
-                "term={term}: 最长 metadata 应可右对齐"
-            );
         }
     }
 

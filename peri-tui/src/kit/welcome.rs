@@ -10,10 +10,10 @@ use peri_theme::atoms::THEME_ATOM;
 use ratatui_kit::{
     prelude::*,
     ratatui::{
-        layout::{Constraint, Direction, Flex},
+        layout::{Constraint, Direction},
         style::{Color, Modifier, Style},
         text::{Line, Span},
-        widgets::Paragraph,
+        widgets::{Block, Padding, Paragraph},
     },
 };
 
@@ -149,28 +149,41 @@ pub fn Welcome(props: &WelcomeProps, mut hooks: Hooks) -> impl Into<AnyElement<'
     ]));
 
     lines.push(Line::from(""));
-    lines.push(
-        Line::from(vec![Span::styled(
-            i18n::tr("welcome-shortcuts"),
-            Style::default().fg(semantic.text.dim),
-        )])
-        .centered(),
-    );
-
-    let centered_lines: Vec<Line<'static>> =
-        lines.into_iter().map(|line| line.centered()).collect();
-    let welcome_height = centered_lines.len() as u16;
+    lines.push(Line::from(Span::styled(
+        i18n::tr("welcome-shortcuts"),
+        Style::default().fg(semantic.text.dim),
+    )));
+    let welcome_height = lines.len() as u16;
 
     element!(
         View(
             flex_direction: Direction::Vertical,
             width: Constraint::Fill(1),
             height: Constraint::Fill(1),
-            justify_content: Flex::Center,
         ) {
             View(width: Constraint::Fill(1), height: Constraint::Length(welcome_height)) {
-                Text(text: Paragraph::new(centered_lines))
+                Text(text: Paragraph::new(lines).block(Block::new().padding(Padding::horizontal(2))))
             }
         }
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui_kit::test_util::render_frame;
+
+    #[test]
+    #[serial_test::serial]
+    fn welcome_starts_at_top_left_at_every_width() {
+        for width in [30u16, 80, 140, 220] {
+            let buffer = render_frame(element!(Welcome(width: width as usize)), width, 30);
+            let (row, symbol) = if width < 40 { (0, "P") } else { (8, "Y") };
+            assert_eq!(
+                buffer[(2, row)].symbol(),
+                symbol,
+                "width={width}：欢迎内容靠左靠上"
+            );
+        }
+    }
 }
