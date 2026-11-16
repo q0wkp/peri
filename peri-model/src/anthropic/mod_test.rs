@@ -504,13 +504,13 @@ fn legacy_model_preserves_manual_budget_clamp_and_minimum() {
 }
 
 #[test]
-fn unknown_models_and_aliases_keep_manual_thinking() {
+fn unknown_models_and_legacy_aliases_keep_manual_thinking() {
     for model in [
         "custom-sonnet-alias",
-        "claude-sonnet-5-5-latest",
-        "claude-sonnet-5-5-20261029",
-        "vendor/claude-sonnet-5-5",
-        "claude-sonnet-5.5",
+        "claude-sonnet-4-6",
+        "claude-sonnet-4-5",
+        "vendor/claude-sonnet-4-5",
+        "claude-3-7-sonnet-latest",
     ] {
         let mut config = config().with_extended_thinking(10_000, "high");
         config.model = model.into();
@@ -521,6 +521,31 @@ fn unknown_models_and_aliases_keep_manual_thinking() {
             json!({ "type": "enabled", "budget_tokens": 10_000 })
         );
         assert_eq!(body["output_config"], json!({ "effort": "high" }));
+    }
+}
+
+#[test]
+fn claude_47_and_later_use_adaptive_thinking() {
+    for model in [
+        "claude-opus-4-7",
+        "claude-opus-4-8",
+        "anthropic.claude-opus-4.8",
+        "claude-sonnet-5",
+        "claude-sonnet-5-5",
+        "claude-sonnet-5.5",
+        "claude-sonnet-5-5-latest",
+        "claude-sonnet-5-5-20261029",
+        "vendor/claude-opus-5-5",
+        "claude-haiku-5-5",
+        "claude-fable-5-2",
+        "claude-mythos-5",
+    ] {
+        let mut config = config().with_extended_thinking(10_000, "xhigh");
+        config.model = model.into();
+        let body = body_for_test(&config, &ModelRequest::default());
+        assert_eq!(body["model"], model);
+        assert_eq!(body["thinking"], json!({ "type": "adaptive" }));
+        assert_eq!(body["output_config"], json!({ "effort": "xhigh" }));
     }
 }
 

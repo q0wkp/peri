@@ -288,9 +288,32 @@ fn content_to_anthropic_parts(content: &[ContentBlock], replay: ThinkingReplay) 
         .collect()
 }
 
-/// 已确认只支持 adaptive thinking、拒绝手动 `enabled` 的精确模型。
+/// 已确认只接受 adaptive thinking、拒绝手动 `enabled` 的模型。
+///
+/// Claude 4.7 及之后（含所有 Claude 5+ 家族：opus/sonnet/haiku/fable/mythos）
+/// 已移除手动 `thinking: {"type":"enabled"}`，请求必须改为 `adaptive`。
+/// 这里只识别新的 `<family>-<major>[-.]<minor>` 命名；旧式 `claude-3-7-sonnet`
+/// 等仍属于仅支持手动 thinking 的模型。
 fn uses_adaptive_thinking(model: &str) -> bool {
-    model == "claude-sonnet-5-5"
+    let model = model.to_ascii_lowercase();
+    let Some((_, rest)) = model.split_once("claude-") else {
+        return false;
+    };
+    let Some((family, version)) = rest.split_once('-') else {
+        return false;
+    };
+    if !matches!(family, "opus" | "sonnet" | "haiku" | "fable" | "mythos") {
+        return false;
+    }
+    let mut parts = version.split(['-', '.']);
+    let Some(major) = parts.next().and_then(|part| part.parse::<u32>().ok()) else {
+        return false;
+    };
+    let minor = parts
+        .next()
+        .and_then(|part| part.parse::<u32>().ok())
+        .unwrap_or(0);
+    major > 4 || (major == 4 && minor >= 7)
 }
 
 fn has_replay_signature(signature: &Option<String>) -> bool {
